@@ -439,6 +439,26 @@ select:focus-visible {
   line-height: 1.5;
 }
 
+.cooked-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 32px;
+  padding: 10px 15px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cooked-button.complete {
+  color: var(--muted);
+  cursor: default;
+}
+
 .auth-modal {
   width: min(420px, 100%);
   padding: 38px;

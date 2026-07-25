@@ -7,6 +7,7 @@ export type Recipe = {
   calories: number;
   cuisine: string;
   tags: string[];
+  dietary?: string[];
   ingredients: string[];
   steps: string[];
   why: string;
@@ -32,6 +33,7 @@ export const recipes: Recipe[] = [
     calories: 590,
     cuisine: "Mediterranean",
     tags: ["High protein", "Gluten-free"],
+    dietary: ["Gluten-free", "Nut-free", "Halal"],
     ingredients: [
       "2 salmon fillets",
       "2 tbsp harissa paste",
@@ -59,6 +61,7 @@ export const recipes: Recipe[] = [
     calories: 540,
     cuisine: "Italian",
     tags: ["Vegetarian", "Pantry-friendly"],
+    dietary: ["Vegetarian", "Nut-free"],
     ingredients: [
       "8 oz rigatoni",
       "1 pint cherry tomatoes",
@@ -86,6 +89,7 @@ export const recipes: Recipe[] = [
     calories: 620,
     cuisine: "Japanese-inspired",
     tags: ["High protein", "One pan"],
+    dietary: ["Dairy-free", "Nut-free"],
     ingredients: [
       "4 boneless chicken thighs",
       "2 tbsp white miso",
@@ -113,6 +117,15 @@ export const recipes: Recipe[] = [
     calories: 510,
     cuisine: "Mexican-inspired",
     tags: ["Vegan", "High fiber"],
+    dietary: [
+      "Vegetarian",
+      "Vegan",
+      "Gluten-free",
+      "Dairy-free",
+      "Nut-free",
+      "Halal",
+      "Kosher",
+    ],
     ingredients: [
       "1 can chickpeas",
       "8 corn tortillas",
@@ -140,6 +153,15 @@ export const recipes: Recipe[] = [
     calories: 480,
     cuisine: "Middle Eastern-inspired",
     tags: ["Vegan", "Gluten-free"],
+    dietary: [
+      "Vegetarian",
+      "Vegan",
+      "Gluten-free",
+      "Dairy-free",
+      "Nut-free",
+      "Halal",
+      "Kosher",
+    ],
     ingredients: [
       "1 large sweet potato",
       "4 cups mixed greens",
@@ -167,6 +189,7 @@ export const recipes: Recipe[] = [
     calories: 500,
     cuisine: "Italian",
     tags: ["Vegetarian", "20 minutes"],
+    dietary: ["Vegetarian", "Nut-free"],
     ingredients: [
       "1 cup orzo",
       "1½ cups vegetable stock",

@@ -38,7 +38,7 @@ Add the environment values below to enable live authentication and AI results.
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.6
+OPENAI_MODEL=gpt-5-nano
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 

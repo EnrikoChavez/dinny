@@ -56,17 +56,25 @@ const genderOptions = [
   "Prefer not to say",
 ];
 
-function rankRecipes(restrictions: string[]) {
-  return [...initialRecipes]
+function rankRecipes(
+  restrictions: string[],
+  history: HistoryItem[] = [],
+) {
+  const recentIds = new Set(history.slice(0, 10).map((item) => item.recipe.id));
+  const compatible = initialRecipes.filter((recipe) =>
+    restrictions.every((restriction) =>
+      recipe.dietary?.some(
+        (item) => item.toLowerCase() === restriction.toLowerCase(),
+      ),
+    ),
+  );
+
+  return compatible
     .map((recipe, index) => ({
       recipe,
       score:
-        restrictions.filter((restriction) =>
-          recipe.tags.some(
-            (tag) => tag.toLowerCase() === restriction.toLowerCase(),
-          ),
-        ).length *
-          10 -
+        restrictions.length * 10 -
+        (recentIds.has(recipe.id) ? 100 : 0) -
         index / 100,
     }))
     .sort((a, b) => b.score - a.score)
@@ -194,7 +202,7 @@ export default function Home() {
 
       setProfile(nextProfile);
       setProfileDraft(nextProfile);
-      setRecommendations(rankRecipes(nextProfile.restrictions));
+      setRecommendations(rankRecipes(nextProfile.restrictions, cloudHistory));
       setLastUsed(cloudHistory);
       setProfileReady(true);
     }
@@ -249,7 +257,7 @@ export default function Home() {
     window.localStorage.setItem(`dinny-onboarding-${user.id}`, "done");
     setProfile(nextProfile);
     setProfileDraft(nextProfile);
-    setRecommendations(rankRecipes(nextProfile.restrictions));
+    setRecommendations(rankRecipes(nextProfile.restrictions, lastUsed));
     setProfileOpen(false);
   }
 
@@ -282,8 +290,7 @@ export default function Home() {
     }
   }
 
-  async function openRecipe(recipe: Recipe) {
-    await rememberRecipe(recipe);
+  function openRecipe(recipe: Recipe) {
     setSelectedRecipe(recipe);
   }
 
@@ -305,15 +312,7 @@ export default function Home() {
       const response = await fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: requestPrompt,
-          preferences: profile.restrictions,
-          profile: {
-            age: profile.age,
-            gender: profile.gender,
-            location: profile.location,
-          },
-        }),
+        body: JSON.stringify({ prompt: requestPrompt }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Try again.");
@@ -510,6 +509,16 @@ export default function Home() {
         <RecipeDetail
           recipe={selectedRecipe}
           onClose={() => setSelectedRecipe(null)}
+          onCooked={
+            user
+              ? () => {
+                  void rememberRecipe(selectedRecipe);
+                }
+              : undefined
+          }
+          cooked={lastUsed.some(
+            (item) => item.recipe.id === selectedRecipe.id,
+          )}
         />
       )}
 
@@ -575,9 +584,13 @@ function RecipeOption({
 function RecipeDetail({
   recipe,
   onClose,
+  onCooked,
+  cooked,
 }: {
   recipe: Recipe;
   onClose: () => void;
+  onCooked?: () => void;
+  cooked: boolean;
 }) {
   return (
     <div className="overlay" role="presentation" onMouseDown={onClose}>
@@ -615,6 +628,16 @@ function RecipeDetail({
             </ol>
           </section>
         </div>
+        {onCooked && (
+          <button
+            className={cooked ? "cooked-button complete" : "cooked-button"}
+            onClick={onCooked}
+            disabled={cooked}
+          >
+            {cooked && <Check size={15} />}
+            {cooked ? "Made" : "Made this"}
+          </button>
+        )}
       </article>
     </div>
   );
