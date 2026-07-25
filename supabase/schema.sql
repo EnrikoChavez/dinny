@@ -30,8 +30,12 @@ create table if not exists public.user_preferences (
   max_cook_minutes integer,
   spice_level smallint check (spice_level between 0 and 5),
   calorie_goal integer,
+  preference_notes text not null default '',
   updated_at timestamptz not null default now()
 );
+
+alter table public.user_preferences
+  add column if not exists preference_notes text not null default '';
 
 create table if not exists public.cuisine_preferences (
   user_id uuid not null references auth.users(id) on delete cascade,

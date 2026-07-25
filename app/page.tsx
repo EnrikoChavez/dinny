@@ -9,18 +9,37 @@ import {
   History,
   LogOut,
   Mail,
+  RefreshCw,
+  SlidersHorizontal,
   UserRound,
   X,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  dietaryRestrictionOptions,
+  emptyPreferenceSnapshot,
+  normalizeDietaryRestrictions,
+  type PreferenceSnapshot,
+} from "@/lib/preferences";
 import { recipes as initialRecipes, type Recipe } from "@/lib/recipes";
 import {
   createSupabaseBrowserClient,
   hasSupabaseConfig,
 } from "@/lib/supabase-browser";
 
-type View = "home" | "last-used";
+type View = "home" | "last-used" | "preferences";
 type HistoryItem = { recipe: Recipe; usedAt: string };
+type StoredPreferenceRow = {
+  vegetarian: boolean;
+  vegan: boolean;
+  gluten_free: boolean;
+  lactose_free: boolean;
+  high_protein: boolean;
+  max_cook_minutes: number | null;
+  spice_level: number | null;
+  calorie_goal: number | null;
+  preference_notes: string;
+};
 type Profile = {
   displayName: string;
   age: string;
@@ -39,16 +58,6 @@ const emptyProfile: Profile = {
   complete: false,
 };
 
-const restrictionOptions = [
-  "Vegetarian",
-  "Vegan",
-  "Gluten-free",
-  "Dairy-free",
-  "Nut-free",
-  "Halal",
-  "Kosher",
-];
-
 const genderOptions = [
   "Woman",
   "Man",
@@ -57,12 +66,12 @@ const genderOptions = [
 ];
 
 function rankRecipes(
-  restrictions: string[],
+  preferences: PreferenceSnapshot,
   history: HistoryItem[] = [],
 ) {
   const recentIds = new Set(history.slice(0, 10).map((item) => item.recipe.id));
   const compatible = initialRecipes.filter((recipe) =>
-    restrictions.every((restriction) =>
+    preferences.dietaryRestrictions.every((restriction) =>
       recipe.dietary?.some(
         (item) => item.toLowerCase() === restriction.toLowerCase(),
       ),
@@ -73,7 +82,19 @@ function rankRecipes(
     .map((recipe, index) => ({
       recipe,
       score:
-        restrictions.length * 10 -
+        preferences.dietaryRestrictions.length * 10 +
+        (preferences.highProtein && recipe.tags.includes("High protein")
+          ? 20
+          : 0) +
+        (preferences.favoriteCuisines.some((cuisine) =>
+          recipe.cuisine.toLowerCase().includes(cuisine.toLowerCase()),
+        )
+          ? 20
+          : 0) -
+        (preferences.maxCookMinutes &&
+        recipe.time > preferences.maxCookMinutes
+          ? 50
+          : 0) -
         (recentIds.has(recipe.id) ? 100 : 0) -
         index / 100,
     }))
@@ -98,6 +119,9 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [profileDraft, setProfileDraft] = useState<Profile>(emptyProfile);
+  const [preferences, setPreferences] = useState<PreferenceSnapshot>(
+    emptyPreferenceSnapshot,
+  );
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
@@ -148,6 +172,7 @@ export default function Home() {
       queueMicrotask(() => {
         setProfile(emptyProfile);
         setProfileDraft(emptyProfile);
+        setPreferences(emptyPreferenceSnapshot);
         setProfileReady(true);
         setRecommendations(initialRecipes.slice(0, 3));
         setLastUsed([]);
@@ -160,7 +185,12 @@ export default function Home() {
     const accountUser = user;
 
     async function loadAccount() {
-      const [{ data: profileData }, { data: historyData }] = await Promise.all([
+      const [
+        { data: profileData },
+        { data: preferenceData },
+        { data: cuisineData },
+        { data: historyData },
+      ] = await Promise.all([
         accountSupabase
           .from("profiles")
           .select(
@@ -169,8 +199,22 @@ export default function Home() {
           .eq("id", accountUser.id)
           .maybeSingle(),
         accountSupabase
+          .from("user_preferences")
+          .select(
+            "vegetarian, vegan, gluten_free, lactose_free, high_protein, max_cook_minutes, spice_level, calorie_goal, preference_notes",
+          )
+          .eq("user_id", accountUser.id)
+          .maybeSingle<StoredPreferenceRow>(),
+        accountSupabase
+          .from("cuisine_preferences")
+          .select("cuisine")
+          .eq("user_id", accountUser.id)
+          .order("score", { ascending: false })
+          .limit(8),
+        accountSupabase
           .from("recipe_history")
           .select("recipe, used_at")
+          .eq("user_id", accountUser.id)
           .order("used_at", { ascending: false })
           .limit(20),
       ]);
@@ -180,6 +224,28 @@ export default function Home() {
       const localComplete =
         window.localStorage.getItem(`dinny-onboarding-${accountUser.id}`) ===
         "done";
+      const restrictionSet = new Set(
+        normalizeDietaryRestrictions(
+          Array.isArray(profileData?.dietary_restrictions)
+            ? profileData.dietary_restrictions
+            : [],
+        ),
+      );
+      if (preferenceData?.vegetarian) restrictionSet.add("Vegetarian");
+      if (preferenceData?.vegan) restrictionSet.add("Vegan");
+      if (preferenceData?.gluten_free) restrictionSet.add("Gluten-free");
+      if (preferenceData?.lactose_free) restrictionSet.add("Dairy-free");
+      const nextPreferences: PreferenceSnapshot = {
+        dietaryRestrictions: normalizeDietaryRestrictions([
+          ...restrictionSet,
+        ]),
+        highProtein: preferenceData?.high_protein ?? false,
+        maxCookMinutes: preferenceData?.max_cook_minutes ?? null,
+        spiceLevel: preferenceData?.spice_level ?? null,
+        calorieGoal: preferenceData?.calorie_goal ?? null,
+        favoriteCuisines: (cuisineData ?? []).map((item) => item.cuisine),
+        preferenceNotes: preferenceData?.preference_notes ?? "",
+      };
       const nextProfile: Profile = {
         displayName:
           profileData?.display_name ||
@@ -189,9 +255,7 @@ export default function Home() {
         age: profileData?.age ? String(profileData.age) : "",
         gender: profileData?.gender || "",
         location: profileData?.location || "",
-        restrictions: Array.isArray(profileData?.dietary_restrictions)
-          ? profileData.dietary_restrictions
-          : [],
+        restrictions: nextPreferences.dietaryRestrictions,
         complete: Boolean(profileData?.onboarding_complete || localComplete),
       };
 
@@ -202,7 +266,8 @@ export default function Home() {
 
       setProfile(nextProfile);
       setProfileDraft(nextProfile);
-      setRecommendations(rankRecipes(nextProfile.restrictions, cloudHistory));
+      setPreferences(nextPreferences);
+      setRecommendations(rankRecipes(nextPreferences, cloudHistory));
       setLastUsed(cloudHistory);
       setProfileReady(true);
     }
@@ -225,6 +290,7 @@ export default function Home() {
 
     setProfileBusy(true);
     setProfileMessage("");
+    const completingOnboarding = !profile.complete;
 
     const nextProfile: Profile = {
       ...profileDraft,
@@ -233,20 +299,46 @@ export default function Home() {
       complete: true,
     };
 
-    const { error } = await supabase.from("profiles").upsert(
-      {
-        id: user.id,
-        email: user.email,
-        display_name: nextProfile.displayName,
-        age,
-        gender: nextProfile.gender || null,
-        location: nextProfile.location,
-        dietary_restrictions: nextProfile.restrictions,
-        onboarding_complete: true,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" },
-    );
+    const writes = [
+      supabase.from("profiles").upsert(
+        {
+          id: user.id,
+          email: user.email,
+          display_name: nextProfile.displayName,
+          age,
+          gender: nextProfile.gender || null,
+          location: nextProfile.location,
+          dietary_restrictions: nextProfile.restrictions,
+          onboarding_complete: true,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" },
+      ),
+    ];
+
+    if (completingOnboarding) {
+      writes.push(
+        supabase.from("user_preferences").upsert(
+          {
+            user_id: user.id,
+            vegetarian: nextProfile.restrictions.includes("Vegetarian"),
+            vegan: nextProfile.restrictions.includes("Vegan"),
+            gluten_free: nextProfile.restrictions.includes("Gluten-free"),
+            lactose_free: nextProfile.restrictions.includes("Dairy-free"),
+            high_protein: preferences.highProtein,
+            max_cook_minutes: preferences.maxCookMinutes,
+            spice_level: preferences.spiceLevel,
+            calorie_goal: preferences.calorieGoal,
+            preference_notes: preferences.preferenceNotes,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" },
+        ),
+      );
+    }
+
+    const results = await Promise.all(writes);
+    const error = results.find((result) => result.error)?.error;
 
     setProfileBusy(false);
     if (error) {
@@ -255,9 +347,14 @@ export default function Home() {
     }
 
     window.localStorage.setItem(`dinny-onboarding-${user.id}`, "done");
+    const nextPreferences = {
+      ...preferences,
+      dietaryRestrictions: nextProfile.restrictions,
+    };
     setProfile(nextProfile);
     setProfileDraft(nextProfile);
-    setRecommendations(rankRecipes(nextProfile.restrictions, lastUsed));
+    setPreferences(nextPreferences);
+    setRecommendations(rankRecipes(nextPreferences, lastUsed));
     setProfileOpen(false);
   }
 
@@ -294,15 +391,16 @@ export default function Home() {
     setSelectedRecipe(recipe);
   }
 
-  async function requestRecommendations(event: FormEvent) {
-    event.preventDefault();
+  async function runRecommendation(
+    requestPrompt: string,
+    refresh = false,
+  ) {
     if (!user) {
       setAuthMessage("Sign in to ask Dinny.");
       setAuthOpen(true);
       return;
     }
 
-    const requestPrompt = prompt.trim();
     if (!requestPrompt || recommendationLoading) return;
 
     setRecommendationLoading(true);
@@ -312,20 +410,52 @@ export default function Home() {
       const response = await fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: requestPrompt }),
+        body: JSON.stringify({
+          prompt: requestPrompt,
+          refresh,
+          excludeRecipes: refresh
+            ? recommendations.map((recipe) => recipe.title)
+            : [],
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Try again.");
 
       setRecommendations(data.recipes);
       setAssistantMessage(data.message);
-      setPrompt("");
-      setView("home");
+      if (data.preferences) {
+        const nextPreferences = data.preferences as PreferenceSnapshot;
+        setPreferences(nextPreferences);
+        setProfile((current) => ({
+          ...current,
+          restrictions: nextPreferences.dietaryRestrictions,
+        }));
+        setProfileDraft((current) => ({
+          ...current,
+          restrictions: nextPreferences.dietaryRestrictions,
+        }));
+      }
+      if (!data.preferencesUpdated || view !== "preferences") {
+        setView("home");
+      }
     } catch {
       setAssistantMessage("Try again in a moment.");
     } finally {
       setRecommendationLoading(false);
     }
+  }
+
+  async function requestRecommendations(event: FormEvent) {
+    event.preventDefault();
+    const requestPrompt = prompt.trim();
+    if (!requestPrompt) return;
+
+    await runRecommendation(requestPrompt);
+    setPrompt("");
+  }
+
+  async function refreshRecommendations() {
+    await runRecommendation("Show me three more options.", true);
   }
 
   async function signInWithGoogle() {
@@ -399,6 +529,16 @@ export default function Home() {
           >
             Last used
           </button>
+          {user && (
+            <button
+              className={
+                view === "preferences" ? "nav-link active" : "nav-link"
+              }
+              onClick={() => setView("preferences")}
+            >
+              Preferences
+            </button>
+          )}
         </nav>
 
         <div className="account">
@@ -432,7 +572,22 @@ export default function Home() {
           <section className="home-stage">
             <div className="home-heading">
               {visibleName && <p>For {visibleName}</p>}
-              <h1>Explore a recipe?</h1>
+              <div className="home-heading-line">
+                <h1>Explore a recipe?</h1>
+                <button
+                  className={
+                    recommendationLoading
+                      ? "refresh-recipes loading"
+                      : "refresh-recipes"
+                  }
+                  onClick={() => void refreshRecommendations()}
+                  disabled={recommendationLoading}
+                  aria-label="Refresh recipe options"
+                  title="More recipes"
+                >
+                  <RefreshCw size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="recipe-options" aria-label="Recipe ideas">
@@ -449,7 +604,7 @@ export default function Home() {
               <p className="assistant-message">{assistantMessage}</p>
             )}
           </section>
-        ) : (
+        ) : view === "last-used" ? (
           <section className="history-view">
             <div className="view-heading">
               <History size={18} />
@@ -478,10 +633,15 @@ export default function Home() {
               <p className="empty-copy">No recipes yet.</p>
             )}
           </section>
+        ) : (
+          <PreferencesView
+            preferences={preferences}
+            message={assistantMessage}
+          />
         )}
       </main>
 
-      {view === "home" && (
+      {view !== "last-used" && (
         <div className="chat-dock">
           <form className="chat-form" onSubmit={requestRecommendations}>
             <input
@@ -490,8 +650,14 @@ export default function Home() {
               onFocus={() => {
                 if (!user) setAuthOpen(true);
               }}
-              placeholder={user ? "Ask Dinny" : "Sign in to ask Dinny"}
-              aria-label="Ask Dinny for a recipe"
+              placeholder={
+                user
+                  ? view === "preferences"
+                    ? "Update a preference"
+                    : "Ask Dinny or update preferences"
+                  : "Sign in to ask Dinny"
+              }
+              aria-label="Ask Dinny or update preferences"
               readOnly={!user}
             />
             <button
@@ -558,6 +724,72 @@ export default function Home() {
         />
       )}
     </div>
+  );
+}
+
+function PreferencesView({
+  preferences,
+  message,
+}: {
+  preferences: PreferenceSnapshot;
+  message: string;
+}) {
+  const rows = [
+    {
+      label: "Dietary",
+      value: preferences.dietaryRestrictions.join(", ") || "Not set",
+    },
+    {
+      label: "High protein",
+      value: preferences.highProtein ? "Preferred" : "Not set",
+    },
+    {
+      label: "Cook time",
+      value: preferences.maxCookMinutes
+        ? `Up to ${preferences.maxCookMinutes} min`
+        : "Not set",
+    },
+    {
+      label: "Spice",
+      value:
+        preferences.spiceLevel === null
+          ? "Not set"
+          : `${preferences.spiceLevel} / 5`,
+    },
+    {
+      label: "Calories",
+      value: preferences.calorieGoal
+        ? `About ${preferences.calorieGoal}`
+        : "Not set",
+    },
+    {
+      label: "Cuisines",
+      value: preferences.favoriteCuisines.join(", ") || "Not set",
+    },
+  ];
+
+  return (
+    <section className="preferences-view">
+      <div className="view-heading">
+        <SlidersHorizontal size={18} />
+        <h1>Preferences</h1>
+      </div>
+
+      <dl className="preference-list">
+        {rows.map((row) => (
+          <div key={row.label}>
+            <dt>{row.label}</dt>
+            <dd>{row.value}</dd>
+          </div>
+        ))}
+        <div className="preference-notes-row">
+          <dt>Other</dt>
+          <dd>{preferences.preferenceNotes || "Not set"}</dd>
+        </div>
+      </dl>
+
+      {message && <p className="assistant-message">{message}</p>}
+    </section>
   );
 }
 
@@ -796,26 +1028,30 @@ function ProfileForm({
           </label>
         </div>
 
-        <fieldset>
-          <legend>Dietary restrictions</legend>
-          <div className="restriction-grid">
-            {restrictionOptions.map((restriction) => {
-              const selected = profile.restrictions.includes(restriction);
-              return (
-                <button
-                  type="button"
-                  key={restriction}
-                  className={selected ? "restriction selected" : "restriction"}
-                  onClick={() => onToggleRestriction(restriction)}
-                  aria-pressed={selected}
-                >
-                  <span>{selected && <Check size={14} />}</span>
-                  {restriction}
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
+        {onboarding && (
+          <fieldset>
+            <legend>Dietary restrictions</legend>
+            <div className="restriction-grid">
+              {dietaryRestrictionOptions.map((restriction) => {
+                const selected = profile.restrictions.includes(restriction);
+                return (
+                  <button
+                    type="button"
+                    key={restriction}
+                    className={
+                      selected ? "restriction selected" : "restriction"
+                    }
+                    onClick={() => onToggleRestriction(restriction)}
+                    aria-pressed={selected}
+                  >
+                    <span>{selected && <Check size={14} />}</span>
+                    {restriction}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+        )}
 
         {message && <p className="form-message">{message}</p>}
         <button className="continue-button" disabled={busy}>
