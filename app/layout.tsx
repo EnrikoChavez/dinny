@@ -20,9 +20,9 @@ export const metadata: Metadata = {
     images: [
       {
         url: "/og.png",
-        width: 1733,
-        height: 909,
-        alt: "Dinny — Dinner, decided.",
+        width: 1200,
+        height: 630,
+        alt: "food recc",
       },
     ],
   },

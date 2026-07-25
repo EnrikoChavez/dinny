@@ -1,0 +1,19 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="1200"
+  height="630"
+  viewBox="0 0 1200 630"
+>
+  <rect width="1200" height="630" fill="#f7f6f1" />
+  <text
+    x="600"
+    y="315"
+    dominant-baseline="middle"
+    text-anchor="middle"
+    fill="#171715"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="112"
+    font-weight="500"
+    letter-spacing="-5"
+  >food recc</text>
+</svg>
