@@ -6,6 +6,11 @@ import { recipeImages, recipes, type Recipe } from "@/lib/recipes";
 type RequestBody = {
   prompt?: string;
   preferences?: string[];
+  profile?: {
+    age?: string;
+    gender?: string;
+    location?: string;
+  };
 };
 
 const recipeSchema = {
@@ -93,8 +98,7 @@ function localRecommendations(prompt: string, preferences: string[]) {
     .map(({ recipe }) => recipe);
 
   return {
-    message:
-      "Here are three strong matches. I balanced your request with weeknight-friendly prep and ingredients you can actually find.",
+    message: "Three options for you.",
     recipes: scored,
     mode: "sample" as const,
   };
@@ -156,6 +160,7 @@ export async function POST(request: Request) {
 
   const prompt = body.prompt?.trim().slice(0, 600) || "A quick balanced dinner";
   const preferences = (body.preferences ?? []).slice(0, 8);
+  const profile = body.profile;
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
@@ -176,13 +181,15 @@ export async function POST(request: Request) {
           {
             role: "system",
             content:
-              "You are Dinny, a practical recipe recommender. Return exactly three varied, realistic recipes. Respect every stated dietary restriction. Use common grocery-store ingredients, concise steps, and honest estimated time and calories. Make the explanation warm and direct.",
+              "You are Dinny, a practical recipe recommender. Return exactly three varied, realistic recipes. Respect every stated dietary restriction. Use common grocery-store ingredients, concise steps, and honest estimated time and calories. Keep the message under eight words. Never stereotype based on age, gender, or location.",
           },
           {
             role: "user",
             content: `Dinner request: ${prompt}\nSaved preferences: ${
               preferences.join(", ") || "none"
-            }`,
+            }\nProfile context: age ${profile?.age || "not provided"}, gender ${
+              profile?.gender || "not provided"
+            }, location ${profile?.location || "not provided"}`,
           },
         ],
         text: {

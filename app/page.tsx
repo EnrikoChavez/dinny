@@ -1,24 +1,17 @@
 "use client";
 
-import Image from "next/image";
+import type { User } from "@supabase/supabase-js";
 import {
-  ArrowRight,
   ArrowUp,
   Check,
-  ChefHat,
+  ChevronRight,
   Clock3,
-  Compass,
-  Flame,
   History,
   LogOut,
   Mail,
-  MessageCircle,
-  SlidersHorizontal,
-  Sparkles,
   UserRound,
   X,
 } from "lucide-react";
-import type { User } from "@supabase/supabase-js";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { recipes as initialRecipes, type Recipe } from "@/lib/recipes";
 import {
@@ -26,99 +19,114 @@ import {
   hasSupabaseConfig,
 } from "@/lib/supabase-browser";
 
-type Tab = "discover" | "ask" | "last-used";
+type View = "home" | "last-used";
 type HistoryItem = { recipe: Recipe; usedAt: string };
+type Profile = {
+  displayName: string;
+  age: string;
+  gender: string;
+  location: string;
+  restrictions: string[];
+  complete: boolean;
+};
 
-const preferenceOptions = [
+const emptyProfile: Profile = {
+  displayName: "",
+  age: "",
+  gender: "",
+  location: "",
+  restrictions: [],
+  complete: false,
+};
+
+const restrictionOptions = [
   "Vegetarian",
-  "High protein",
-  "Under 30 min",
-  "Gluten-free",
   "Vegan",
+  "Gluten-free",
+  "Dairy-free",
+  "Nut-free",
+  "Halal",
+  "Kosher",
 ];
 
-const suggestionPrompts = [
-  "Something cozy in 30 minutes",
-  "High-protein and fresh",
-  "Use up vegetables",
-  "A meatless crowd-pleaser",
+const genderOptions = [
+  "Woman",
+  "Man",
+  "Non-binary",
+  "Prefer not to say",
 ];
+
+function rankRecipes(restrictions: string[]) {
+  return [...initialRecipes]
+    .map((recipe, index) => ({
+      recipe,
+      score:
+        restrictions.filter((restriction) =>
+          recipe.tags.some(
+            (tag) => tag.toLowerCase() === restriction.toLowerCase(),
+          ),
+        ).length *
+          10 -
+        index / 100,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(({ recipe }) => recipe);
+}
 
 function formatHistoryDate(value: string) {
   const date = new Date(value);
-  const today = new Date();
-  const isToday = date.toDateString() === today.toDateString();
-  return isToday
-    ? `Today, ${date.toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-      })}`
-    : date.toLocaleDateString([], {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      });
+  return date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function Home() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const [activeTab, setActiveTab] = useState<Tab>("discover");
-  const [preferences, setPreferences] = useState<string[]>([]);
-  const [lastUsed, setLastUsed] = useState<HistoryItem[]>([]);
-  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [view, setView] = useState<View>("home");
+  const [authReady, setAuthReady] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile>(emptyProfile);
+  const [profileDraft, setProfileDraft] = useState<Profile>(emptyProfile);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileMessage, setProfileMessage] = useState("");
   const [authOpen, setAuthOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
   const [prompt, setPrompt] = useState("");
-  const [recommendations, setRecommendations] =
-    useState<Recipe[]>(initialRecipes.slice(0, 3));
-  const [assistantMessage, setAssistantMessage] = useState(
-    "What are you in the mood for?",
+  const [recommendations, setRecommendations] = useState<Recipe[]>(
+    initialRecipes.slice(0, 3),
   );
-  const [recommendationMode, setRecommendationMode] = useState<
-    "idle" | "loading" | "ai" | "sample"
-  >("idle");
+  const [assistantMessage, setAssistantMessage] = useState("");
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [lastUsed, setLastUsed] = useState<HistoryItem[]>([]);
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      const savedPreferences =
-        window.localStorage.getItem("dinny-preferences") ??
-        window.localStorage.getItem("mise-preferences");
-      const savedHistory =
-        window.localStorage.getItem("dinny-last-used") ??
-        window.localStorage.getItem("mise-last-used");
+    if (!supabase) {
+      queueMicrotask(() => {
+        setAuthReady(true);
+        setProfileReady(true);
+      });
+      return;
+    }
 
-      if (savedPreferences) {
-        try {
-          setPreferences(JSON.parse(savedPreferences));
-        } catch {
-          window.localStorage.removeItem("dinny-preferences");
-          window.localStorage.removeItem("mise-preferences");
-        }
-      }
-
-      if (savedHistory) {
-        try {
-          setLastUsed(JSON.parse(savedHistory));
-        } catch {
-          window.localStorage.removeItem("dinny-last-used");
-          window.localStorage.removeItem("mise-last-used");
-        }
-      }
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      setProfileReady(!data.user);
+      setAuthReady(true);
     });
-  }, []);
 
-  useEffect(() => {
-    if (!supabase) return;
-
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      setProfileReady(!session?.user);
+      setAuthReady(true);
       if (session?.user) setAuthOpen(false);
     });
 
@@ -126,40 +134,140 @@ export default function Home() {
   }, [supabase]);
 
   useEffect(() => {
-    if (!user || !supabase) return;
+    if (!authReady) return;
 
-    supabase
-      .from("recipe_history")
-      .select("recipe, used_at")
-      .order("used_at", { ascending: false })
-      .limit(20)
-      .then(({ data }) => {
-        if (!data?.length) return;
-        const cloudHistory = data.map((item) => ({
-          recipe: item.recipe as Recipe,
-          usedAt: item.used_at as string,
-        }));
-        setLastUsed(cloudHistory);
-        window.localStorage.setItem("dinny-last-used", JSON.stringify(cloudHistory));
+    if (!user || !supabase) {
+      queueMicrotask(() => {
+        setProfile(emptyProfile);
+        setProfileDraft(emptyProfile);
+        setProfileReady(true);
+        setRecommendations(initialRecipes.slice(0, 3));
+        setLastUsed([]);
       });
-  }, [supabase, user]);
+      return;
+    }
 
-  function togglePreference(preference: string) {
-    const next = preferences.includes(preference)
-      ? preferences.filter((item) => item !== preference)
-      : [...preferences, preference];
-    setPreferences(next);
-    window.localStorage.setItem("dinny-preferences", JSON.stringify(next));
+    let cancelled = false;
+    const accountSupabase = supabase;
+    const accountUser = user;
+
+    async function loadAccount() {
+      const [{ data: profileData }, { data: historyData }] = await Promise.all([
+        accountSupabase
+          .from("profiles")
+          .select(
+            "display_name, age, gender, location, dietary_restrictions, onboarding_complete",
+          )
+          .eq("id", accountUser.id)
+          .maybeSingle(),
+        accountSupabase
+          .from("recipe_history")
+          .select("recipe, used_at")
+          .order("used_at", { ascending: false })
+          .limit(20),
+      ]);
+
+      if (cancelled) return;
+
+      const localComplete =
+        window.localStorage.getItem(`dinny-onboarding-${accountUser.id}`) ===
+        "done";
+      const nextProfile: Profile = {
+        displayName:
+          profileData?.display_name ||
+          accountUser.user_metadata.full_name ||
+          accountUser.user_metadata.name ||
+          "",
+        age: profileData?.age ? String(profileData.age) : "",
+        gender: profileData?.gender || "",
+        location: profileData?.location || "",
+        restrictions: Array.isArray(profileData?.dietary_restrictions)
+          ? profileData.dietary_restrictions
+          : [],
+        complete: Boolean(profileData?.onboarding_complete || localComplete),
+      };
+
+      const cloudHistory = (historyData ?? []).map((item) => ({
+        recipe: item.recipe as Recipe,
+        usedAt: item.used_at as string,
+      }));
+
+      setProfile(nextProfile);
+      setProfileDraft(nextProfile);
+      setRecommendations(rankRecipes(nextProfile.restrictions));
+      setLastUsed(cloudHistory);
+      setProfileReady(true);
+    }
+
+    void loadAccount();
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, supabase, user]);
+
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault();
+    if (!user || !supabase || profileBusy) return;
+
+    const age = Number(profileDraft.age);
+    if (!profileDraft.displayName.trim() || !age || !profileDraft.location.trim()) {
+      setProfileMessage("Complete the required fields.");
+      return;
+    }
+
+    setProfileBusy(true);
+    setProfileMessage("");
+
+    const nextProfile: Profile = {
+      ...profileDraft,
+      displayName: profileDraft.displayName.trim(),
+      location: profileDraft.location.trim(),
+      complete: true,
+    };
+
+    const { error } = await supabase.from("profiles").upsert(
+      {
+        id: user.id,
+        email: user.email,
+        display_name: nextProfile.displayName,
+        age,
+        gender: nextProfile.gender || null,
+        location: nextProfile.location,
+        dietary_restrictions: nextProfile.restrictions,
+        onboarding_complete: true,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    );
+
+    setProfileBusy(false);
+    if (error) {
+      setProfileMessage("Couldn’t save yet. Try again.");
+      return;
+    }
+
+    window.localStorage.setItem(`dinny-onboarding-${user.id}`, "done");
+    setProfile(nextProfile);
+    setProfileDraft(nextProfile);
+    setRecommendations(rankRecipes(nextProfile.restrictions));
+    setProfileOpen(false);
+  }
+
+  function toggleRestriction(restriction: string) {
+    setProfileDraft((current) => ({
+      ...current,
+      restrictions: current.restrictions.includes(restriction)
+        ? current.restrictions.filter((item) => item !== restriction)
+        : [...current.restrictions, restriction],
+    }));
   }
 
   async function rememberRecipe(recipe: Recipe) {
     const entry = { recipe, usedAt: new Date().toISOString() };
-    const next = [
+    setLastUsed((current) => [
       entry,
-      ...lastUsed.filter((item) => item.recipe.id !== recipe.id),
-    ].slice(0, 20);
-    setLastUsed(next);
-    window.localStorage.setItem("dinny-last-used", JSON.stringify(next));
+      ...current.filter((item) => item.recipe.id !== recipe.id),
+    ].slice(0, 20));
 
     if (user && supabase) {
       await supabase.from("recipe_history").upsert(
@@ -179,51 +287,51 @@ export default function Home() {
     setSelectedRecipe(recipe);
   }
 
-  async function requestRecommendations(
-    event?: FormEvent,
-    suggestedPrompt?: string,
-  ) {
-    event?.preventDefault();
+  async function requestRecommendations(event: FormEvent) {
+    event.preventDefault();
     if (!user) {
       setAuthMessage("Sign in to ask Dinny.");
       setAuthOpen(true);
       return;
     }
 
-    const requestPrompt = (suggestedPrompt ?? prompt).trim();
-    if (!requestPrompt || recommendationMode === "loading") return;
+    const requestPrompt = prompt.trim();
+    if (!requestPrompt || recommendationLoading) return;
 
-    setPrompt(requestPrompt);
-    setActiveTab("ask");
-    setRecommendationMode("loading");
-    setAssistantMessage("Finding three good matches…");
+    setRecommendationLoading(true);
+    setAssistantMessage("");
 
     try {
       const response = await fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: requestPrompt, preferences }),
+        body: JSON.stringify({
+          prompt: requestPrompt,
+          preferences: profile.restrictions,
+          profile: {
+            age: profile.age,
+            gender: profile.gender,
+            location: profile.location,
+          },
+        }),
       });
       const data = await response.json();
-
       if (!response.ok) throw new Error(data.error || "Try again.");
+
       setRecommendations(data.recipes);
       setAssistantMessage(data.message);
-      setRecommendationMode(data.mode === "ai" ? "ai" : "sample");
+      setPrompt("");
+      setView("home");
     } catch {
-      setAssistantMessage(
-        "I couldn’t refresh the list. Try again in a moment.",
-      );
-      setRecommendations(initialRecipes.slice(0, 3));
-      setRecommendationMode("sample");
+      setAssistantMessage("Try again in a moment.");
+    } finally {
+      setRecommendationLoading(false);
     }
   }
 
   async function signInWithGoogle() {
     if (!supabase) {
-      setAuthMessage(
-        "Google sign-in is ready for your Supabase keys in the deployment settings.",
-      );
+      setAuthMessage("Sign-in is not configured.");
       return;
     }
 
@@ -235,6 +343,7 @@ export default function Home() {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
+
     if (error) {
       setAuthMessage(error.message);
       setAuthBusy(false);
@@ -243,14 +352,7 @@ export default function Home() {
 
   async function signInWithEmail(event: FormEvent) {
     event.preventDefault();
-    if (!email.trim()) return;
-
-    if (!supabase) {
-      setAuthMessage(
-        "Email verification is ready for your Supabase keys in the deployment settings.",
-      );
-      return;
-    }
+    if (!email.trim() || !supabase) return;
 
     setAuthBusy(true);
     setAuthMessage("");
@@ -260,351 +362,149 @@ export default function Home() {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
+
     setAuthBusy(false);
     setAuthMessage(
-      error
-        ? error.message
-        : "Check your inbox for a secure sign-in link. You can close this window.",
+      error ? error.message : "Check your email for the sign-in link.",
     );
   }
 
   async function signOut() {
     await supabase?.auth.signOut();
     setUser(null);
-    setActiveTab("discover");
+    setView("home");
+    setProfileOpen(false);
   }
 
-  function openAsk() {
-    if (!user) {
-      setAuthMessage("Sign in to ask Dinny.");
-      setAuthOpen(true);
-      return;
-    }
-    setActiveTab("ask");
-  }
+  const needsOnboarding =
+    authReady && Boolean(user) && profileReady && !profile.complete;
+  const visibleName = profile.displayName.split(" ")[0];
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <button
-          className="brand"
-          onClick={() => setActiveTab("discover")}
-          aria-label="Go to Dinny home"
-        >
-          <span className="brand-mark">
-            <ChefHat size={18} strokeWidth={2.4} />
-          </span>
-          <span>Dinny</span>
+      <header className="site-header">
+        <button className="wordmark" onClick={() => setView("home")}>
+          Dinny
         </button>
 
-        <nav className="desktop-nav" aria-label="Primary navigation">
-          <NavButton
-            active={activeTab === "discover"}
-            onClick={() => setActiveTab("discover")}
+        <nav aria-label="Primary navigation">
+          <button
+            className={view === "home" ? "nav-link active" : "nav-link"}
+            onClick={() => setView("home")}
           >
-            Discover
-          </NavButton>
-          <NavButton
-            active={activeTab === "ask"}
-            onClick={openAsk}
-          >
-            Ask
-          </NavButton>
-          <NavButton
-            active={activeTab === "last-used"}
-            onClick={() => setActiveTab("last-used")}
+            Home
+          </button>
+          <button
+            className={view === "last-used" ? "nav-link active" : "nav-link"}
+            onClick={() => setView("last-used")}
           >
             Last used
-          </NavButton>
+          </button>
         </nav>
 
-        <div className="account-actions">
+        <div className="account">
           {user ? (
             <>
-              <button className="user-pill" onClick={() => setAuthOpen(true)}>
-                <span>{user.email?.slice(0, 1).toUpperCase()}</span>
-                <span className="user-email">{user.email}</span>
-              </button>
               <button
-                className="icon-button"
-                onClick={signOut}
-                aria-label="Sign out"
-                title="Sign out"
+                className="avatar-button"
+                onClick={() => {
+                  setProfileDraft(profile);
+                  setProfileMessage("");
+                  setProfileOpen(true);
+                }}
+                aria-label="Edit profile"
               >
-                <LogOut size={18} />
+                {(profile.displayName || user.email || "D").slice(0, 1).toUpperCase()}
+              </button>
+              <button className="bare-icon" onClick={signOut} aria-label="Sign out">
+                <LogOut size={17} />
               </button>
             </>
           ) : (
-            <button className="sign-in-button" onClick={() => setAuthOpen(true)}>
-              <UserRound size={17} />
+            <button className="sign-in" onClick={() => setAuthOpen(true)}>
               Sign in
             </button>
           )}
         </div>
       </header>
 
-      <main className="main-content">
-        {activeTab === "discover" && (
-          <>
-            <section className="hero-section">
-              <div className="hero-copy">
-                <p className="eyebrow">
-                  <Sparkles size={15} />
-                  Dinner, decided
-                </p>
-                <h1>What sounds good tonight?</h1>
-                <p className="hero-description">
-                  Say what you want. Dinny finds three good options.
-                </p>
-
-                <form
-                  className="prompt-box hero-prompt"
-                  onSubmit={requestRecommendations}
-                >
-                  <div className="prompt-input-row">
-                    <MessageCircle size={20} aria-hidden="true" />
-                    <input
-                      value={prompt}
-                      onChange={(event) => setPrompt(event.target.value)}
-                      placeholder="e.g. quick dinner with chicken and greens"
-                      aria-label="Describe what you want to cook"
-                    />
-                    <button
-                      type="submit"
-                      className="submit-prompt"
-                      aria-label="Get recommendations"
-                      disabled={!prompt.trim()}
-                    >
-                      <ArrowUp size={18} />
-                    </button>
-                  </div>
-                </form>
-
-                <div className="preference-row" aria-label="Recipe preferences">
-                  <span className="preference-label">
-                    <SlidersHorizontal size={15} />
-                    Tune your picks
-                  </span>
-                  {preferenceOptions.slice(0, 4).map((preference) => (
-                    <button
-                      key={preference}
-                      className={
-                        preferences.includes(preference)
-                          ? "preference-chip selected"
-                          : "preference-chip"
-                      }
-                      onClick={() => togglePreference(preference)}
-                      aria-pressed={preferences.includes(preference)}
-                    >
-                      {preferences.includes(preference) && <Check size={13} />}
-                      {preference}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <FeaturedRecipe recipe={initialRecipes[0]} onOpen={openRecipe} />
-            </section>
-
-            <section className="content-section">
-              <div className="section-heading">
-                <div>
-                  <p className="section-kicker">Made for real weeknights</p>
-                  <h2>Popular recipes</h2>
-                </div>
-                <button className="text-button" onClick={openAsk}>
-                  Get personal picks <ArrowRight size={16} />
-                </button>
-              </div>
-              <div className="recipe-grid">
-                {initialRecipes.slice(1, 4).map((recipe) => (
-                  <RecipeCard
-                    key={recipe.id}
-                    recipe={recipe}
-                    onOpen={openRecipe}
-                  />
-                ))}
-              </div>
-            </section>
-          </>
-        )}
-
-        {activeTab === "ask" && (
-          <section className="ask-layout">
-            <div className="ask-intro">
-              <p className="eyebrow">
-                <Sparkles size={15} /> Personal picks
-              </p>
-              <h1>Ask Dinny</h1>
-              <p>
-                Tell me what you have, want, or avoid.
-              </p>
-              <div className="suggestion-list">
-                {suggestionPrompts.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    onClick={() =>
-                      requestRecommendations(undefined, suggestion)
-                    }
-                  >
-                    {suggestion}
-                    <ArrowRight size={15} />
-                  </button>
-                ))}
-              </div>
+      <main className={view === "home" ? "home-main" : "history-main"}>
+        {view === "home" ? (
+          <section className="home-stage">
+            <div className="home-heading">
+              {visibleName && <p>For {visibleName}</p>}
+              <h1>Explore a recipe?</h1>
             </div>
 
-            <div className="ask-workspace">
-              <form className="prompt-box" onSubmit={requestRecommendations}>
-                <textarea
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  placeholder="I have spinach and half a rotisserie chicken. I want something fresh and filling in under 25 minutes…"
-                  aria-label="Describe your dinner request"
-                  rows={3}
+            <div className="recipe-options" aria-label="Recipe ideas">
+              {recommendations.map((recipe) => (
+                <RecipeOption
+                  key={recipe.id}
+                  recipe={recipe}
+                  onOpen={openRecipe}
                 />
-                <div className="prompt-footer">
-                  <div className="active-preferences">
-                    {preferences.length
-                      ? preferences.map((preference) => (
-                          <span key={preference}>{preference}</span>
-                        ))
-                      : "No dietary filters set"}
-                  </div>
-                  <button
-                    className="primary-button"
-                    disabled={
-                      !prompt.trim() || recommendationMode === "loading"
-                    }
-                  >
-                    {recommendationMode === "loading" ? (
-                      <span className="loading-dot" />
-                    ) : (
-                      <Sparkles size={16} />
-                    )}
-                    Find dinner
-                  </button>
-                </div>
-              </form>
-
-              <div className="assistant-note">
-                <span className="assistant-avatar">
-                  <ChefHat size={17} />
-                </span>
-                <div>
-                  <strong>Dinny</strong>
-                  <p>{assistantMessage}</p>
-                  {recommendationMode === "sample" && (
-                    <small>Sample picks · connect OpenAI for live generation</small>
-                  )}
-                </div>
-              </div>
-
-              <div className="recipe-grid compact">
-                {recommendations.map((recipe) => (
-                  <RecipeCard
-                    key={recipe.id}
-                    recipe={recipe}
-                    onOpen={openRecipe}
-                  />
-                ))}
-              </div>
+              ))}
             </div>
-          </section>
-        )}
 
-        {activeTab === "last-used" && (
-          <section className="history-section">
-            <div className="history-heading">
-              <div>
-                <p className="eyebrow">
-                  <History size={15} /> Your history
-                </p>
-                <h1>Last used</h1>
-                <p>
-                  Recipes you opened are saved here
-                  {user ? " and synced to your account." : "."}
-                </p>
-              </div>
-              {!user && (
-                <button
-                  className="secondary-button"
-                  onClick={() => setAuthOpen(true)}
-                >
-                  Sign in to sync
-                </button>
-              )}
+            {assistantMessage && (
+              <p className="assistant-message">{assistantMessage}</p>
+            )}
+          </section>
+        ) : (
+          <section className="history-view">
+            <div className="view-heading">
+              <History size={18} />
+              <h1>Last used</h1>
             </div>
 
             {lastUsed.length ? (
               <div className="history-list">
-                {lastUsed.map((item, index) => (
+                {lastUsed.map((item) => (
                   <button
-                    className="history-card"
                     key={`${item.recipe.id}-${item.usedAt}`}
+                    className="history-row"
                     onClick={() => openRecipe(item.recipe)}
                   >
-                    <span className="history-number">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <span className="history-image">
-                      <Image
-                        src={item.recipe.image}
-                        alt=""
-                        fill
-                        sizes="88px"
-                      />
-                    </span>
-                    <span className="history-copy">
+                    <span>
                       <strong>{item.recipe.title}</strong>
-                      <span>
-                        {item.recipe.cuisine} · {item.recipe.time} min
-                      </span>
+                      <small>
+                        {item.recipe.time} min · {item.recipe.cuisine}
+                      </small>
                     </span>
                     <time>{formatHistoryDate(item.usedAt)}</time>
-                    <ArrowRight size={18} />
                   </button>
                 ))}
               </div>
             ) : (
-              <div className="empty-state">
-                <span>
-                  <History size={26} />
-                </span>
-                <h2>Nothing here yet</h2>
-                <p>Open a recipe and it will show up here.</p>
-                <button
-                  className="primary-button"
-                  onClick={() => setActiveTab("discover")}
-                >
-                  Discover recipes
-                </button>
-              </div>
+              <p className="empty-copy">No recipes yet.</p>
             )}
           </section>
         )}
       </main>
 
-      <nav className="mobile-nav" aria-label="Mobile navigation">
-        <MobileNavButton
-          label="Discover"
-          active={activeTab === "discover"}
-          onClick={() => setActiveTab("discover")}
-          icon={<Compass size={20} />}
-        />
-        <MobileNavButton
-          label="Ask"
-          active={activeTab === "ask"}
-          onClick={openAsk}
-          icon={<Sparkles size={20} />}
-        />
-        <MobileNavButton
-          label="Last used"
-          active={activeTab === "last-used"}
-          onClick={() => setActiveTab("last-used")}
-          icon={<History size={20} />}
-        />
-      </nav>
+      {view === "home" && (
+        <div className="chat-dock">
+          <form className="chat-form" onSubmit={requestRecommendations}>
+            <input
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              onFocus={() => {
+                if (!user) setAuthOpen(true);
+              }}
+              placeholder={user ? "Ask Dinny" : "Sign in to ask Dinny"}
+              aria-label="Ask Dinny for a recipe"
+              readOnly={!user}
+            />
+            <button
+              type="submit"
+              aria-label="Send"
+              disabled={!user || !prompt.trim() || recommendationLoading}
+            >
+              {recommendationLoading ? <span className="spinner" /> : <ArrowUp size={18} />}
+            </button>
+          </form>
+        </div>
+      )}
 
       {selectedRecipe && (
         <RecipeDetail
@@ -613,13 +513,12 @@ export default function Home() {
         />
       )}
 
-      {authOpen && (
+      {authOpen && !user && (
         <AuthModal
           email={email}
           setEmail={setEmail}
           message={authMessage}
           busy={authBusy}
-          user={user}
           configured={hasSupabaseConfig}
           onGoogle={signInWithGoogle}
           onEmail={signInWithEmail}
@@ -627,52 +526,33 @@ export default function Home() {
             setAuthOpen(false);
             setAuthMessage("");
           }}
-          onSignOut={signOut}
+        />
+      )}
+
+      {(needsOnboarding || profileOpen) && user && (
+        <ProfileForm
+          profile={profileDraft}
+          onboarding={needsOnboarding}
+          busy={profileBusy}
+          message={profileMessage}
+          onChange={setProfileDraft}
+          onToggleRestriction={toggleRestriction}
+          onSubmit={saveProfile}
+          onClose={
+            needsOnboarding
+              ? undefined
+              : () => {
+                  setProfileOpen(false);
+                  setProfileDraft(profile);
+                }
+          }
         />
       )}
     </div>
   );
 }
 
-function NavButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button className={active ? "nav-button active" : "nav-button"} onClick={onClick}>
-      {children}
-    </button>
-  );
-}
-
-function MobileNavButton({
-  label,
-  active,
-  onClick,
-  icon,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-}) {
-  return (
-    <button
-      className={active ? "mobile-nav-button active" : "mobile-nav-button"}
-      onClick={onClick}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
-  );
-}
-
-function FeaturedRecipe({
+function RecipeOption({
   recipe,
   onOpen,
 }: {
@@ -680,77 +560,15 @@ function FeaturedRecipe({
   onOpen: (recipe: Recipe) => void;
 }) {
   return (
-    <article className="featured-card">
-      <Image
-        src={recipe.image}
-        alt={recipe.title}
-        fill
-        priority
-        sizes="(max-width: 800px) 100vw, 44vw"
-      />
-      <div className="featured-shade" />
-      <div className="featured-badge">
-        <Sparkles size={14} /> Tonight’s match
-      </div>
-      <div className="featured-content">
-        <div className="recipe-meta light">
-          <span>
-            <Clock3 size={15} /> {recipe.time} min
-          </span>
-          <span>
-            <Flame size={15} /> {recipe.calories} cal
-          </span>
-        </div>
-        <h2>{recipe.title}</h2>
-        <p>{recipe.summary}</p>
-        <button onClick={() => onOpen(recipe)}>
-          View recipe <ArrowRight size={16} />
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function RecipeCard({
-  recipe,
-  onOpen,
-}: {
-  recipe: Recipe;
-  onOpen: (recipe: Recipe) => void;
-}) {
-  return (
-    <article className="recipe-card">
-      <button
-        className="recipe-image"
-        onClick={() => onOpen(recipe)}
-        aria-label={`Open ${recipe.title}`}
-      >
-        <Image
-          src={recipe.image}
-          alt={recipe.title}
-          fill
-          sizes="(max-width: 760px) 100vw, 33vw"
-        />
-        <span className="time-pill">
-          <Clock3 size={13} /> {recipe.time} min
-        </span>
-      </button>
-      <div className="recipe-card-content">
-        <div className="tag-row">
-          {recipe.tags.slice(0, 2).map((tag) => (
-            <span key={tag}>{tag}</span>
-          ))}
-        </div>
-        <button className="recipe-title" onClick={() => onOpen(recipe)}>
-          {recipe.title}
-        </button>
-        <p>{recipe.summary}</p>
-        <div className="recipe-card-footer">
-          <span>{recipe.cuisine}</span>
-          <span>{recipe.calories} cal</span>
-        </div>
-      </div>
-    </article>
+    <button className="recipe-option" onClick={() => onOpen(recipe)}>
+      <span>
+        <strong>{recipe.title}</strong>
+        <small>
+          <Clock3 size={13} /> {recipe.time} min · {recipe.cuisine}
+        </small>
+      </span>
+      <ChevronRight size={17} />
+    </button>
   );
 }
 
@@ -762,7 +580,7 @@ function RecipeDetail({
   onClose: () => void;
 }) {
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div className="overlay" role="presentation" onMouseDown={onClose}>
       <article
         className="recipe-detail"
         role="dialog"
@@ -770,54 +588,32 @@ function RecipeDetail({
         aria-labelledby="recipe-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <button className="modal-close" onClick={onClose} aria-label="Close recipe">
-          <X size={20} />
+        <button className="close-button" onClick={onClose} aria-label="Close">
+          <X size={19} />
         </button>
-        <div className="detail-hero">
-          <Image
-            src={recipe.image}
-            alt={recipe.title}
-            fill
-            sizes="(max-width: 760px) 100vw, 680px"
-          />
-        </div>
-        <div className="detail-content">
-          <p className="section-kicker">{recipe.cuisine}</p>
-          <h2 id="recipe-title">{recipe.title}</h2>
-          <p className="detail-summary">{recipe.summary}</p>
-          <div className="detail-stats">
-            <span>
-              <Clock3 size={16} /> {recipe.time} minutes
-            </span>
-            <span>
-              <Flame size={16} /> {recipe.calories} calories
-            </span>
-          </div>
-          <div className="why-box">
-            <Sparkles size={18} />
-            <div>
-              <strong>Why this works</strong>
-              <p>{recipe.why}</p>
-            </div>
-          </div>
-          <div className="detail-columns">
-            <section>
-              <h3>Ingredients</h3>
-              <ul>
-                {recipe.ingredients.map((ingredient) => (
-                  <li key={ingredient}>{ingredient}</li>
-                ))}
-              </ul>
-            </section>
-            <section>
-              <h3>Method</h3>
-              <ol>
-                {recipe.steps.map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
-            </section>
-          </div>
+        <p className="detail-meta">
+          {recipe.time} min · {recipe.cuisine} · {recipe.calories} cal
+        </p>
+        <h2 id="recipe-title">{recipe.title}</h2>
+        <p className="detail-summary">{recipe.summary}</p>
+
+        <div className="recipe-columns">
+          <section>
+            <h3>Ingredients</h3>
+            <ul>
+              {recipe.ingredients.map((ingredient) => (
+                <li key={ingredient}>{ingredient}</li>
+              ))}
+            </ul>
+          </section>
+          <section>
+            <h3>Method</h3>
+            <ol>
+              {recipe.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </section>
         </div>
       </article>
     </div>
@@ -829,26 +625,22 @@ function AuthModal({
   setEmail,
   message,
   busy,
-  user,
   configured,
   onGoogle,
   onEmail,
   onClose,
-  onSignOut,
 }: {
   email: string;
   setEmail: (value: string) => void;
   message: string;
   busy: boolean;
-  user: User | null;
   configured: boolean;
   onGoogle: () => void;
   onEmail: (event: FormEvent) => void;
   onClose: () => void;
-  onSignOut: () => void;
 }) {
   return (
-    <div className="modal-backdrop auth-backdrop" onMouseDown={onClose}>
+    <div className="overlay" role="presentation" onMouseDown={onClose}>
       <section
         className="auth-modal"
         role="dialog"
@@ -856,77 +648,157 @@ function AuthModal({
         aria-labelledby="auth-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <button className="modal-close" onClick={onClose} aria-label="Close sign in">
-          <X size={20} />
+        <button className="close-button" onClick={onClose} aria-label="Close">
+          <X size={19} />
         </button>
-        <span className="auth-brand-mark">
-          <ChefHat size={23} />
-        </span>
-        {user ? (
-          <>
-            <p className="section-kicker">You’re signed in</p>
-            <h2 id="auth-title">Welcome back.</h2>
-            <p className="auth-description">
-              Your preferences and recently used recipes can follow you across
-              devices.
-            </p>
-            <div className="signed-in-card">
-              <span>{user.email?.slice(0, 1).toUpperCase()}</span>
-              <div>
-                <strong>{user.user_metadata.full_name || "Home cook"}</strong>
-                <p>{user.email}</p>
-              </div>
-            </div>
-            <button className="secondary-button full" onClick={onSignOut}>
-              <LogOut size={16} /> Sign out
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="section-kicker">Welcome</p>
-            <h2 id="auth-title">Sign in to Dinny.</h2>
-            <p className="auth-description">
-              Ask for recipes and keep your history.
-            </p>
-            <button
-              className="google-button"
-              onClick={onGoogle}
-              disabled={busy}
-            >
-              <span className="google-g">G</span>
-              Continue with Google
-            </button>
-            <div className="auth-divider">
-              <span>or use email</span>
-            </div>
-            <form onSubmit={onEmail}>
-              <label htmlFor="email">Email address</label>
-              <div className="email-field">
-                <Mail size={17} />
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  required
-                />
-              </div>
-              <button className="primary-button full" disabled={busy}>
-                Email me a verification link
-              </button>
-            </form>
-            {message && (
-              <p className={configured ? "auth-message" : "auth-message setup"}>
-                {message}
-              </p>
-            )}
-            <p className="auth-legal">
-              Password-free. Your data stays yours.
-            </p>
-          </>
-        )}
+        <h2 id="auth-title">Sign in</h2>
+        <button className="google-button" onClick={onGoogle} disabled={busy}>
+          <span>G</span>
+          Continue with Google
+        </button>
+        <div className="or-divider">or</div>
+        <form onSubmit={onEmail}>
+          <label htmlFor="email">Email</label>
+          <div className="email-input">
+            <Mail size={16} />
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              required
+            />
+          </div>
+          <button className="primary-action" disabled={busy || !configured}>
+            Email sign-in link
+          </button>
+        </form>
+        {message && <p className="form-message">{message}</p>}
       </section>
+    </div>
+  );
+}
+
+function ProfileForm({
+  profile,
+  onboarding,
+  busy,
+  message,
+  onChange,
+  onToggleRestriction,
+  onSubmit,
+  onClose,
+}: {
+  profile: Profile;
+  onboarding: boolean;
+  busy: boolean;
+  message: string;
+  onChange: (profile: Profile) => void;
+  onToggleRestriction: (restriction: string) => void;
+  onSubmit: (event: FormEvent) => void;
+  onClose?: () => void;
+}) {
+  return (
+    <div className="onboarding-screen">
+      <header className="onboarding-header">
+        <span>Dinny</span>
+        {onClose && (
+          <button onClick={onClose} aria-label="Close profile">
+            <X size={19} />
+          </button>
+        )}
+      </header>
+
+      <form className="profile-form" onSubmit={onSubmit}>
+        <div className="profile-heading">
+          <UserRound size={21} />
+          <h1>{onboarding ? "Tell us about you" : "Your profile"}</h1>
+          <p>Used to tailor your recipes.</p>
+        </div>
+
+        <div className="field-grid">
+          <label>
+            <span>Name</span>
+            <input
+              value={profile.displayName}
+              onChange={(event) =>
+                onChange({ ...profile, displayName: event.target.value })
+              }
+              autoComplete="name"
+              required
+            />
+          </label>
+          <label>
+            <span>Age</span>
+            <input
+              type="number"
+              min="1"
+              max="120"
+              value={profile.age}
+              onChange={(event) =>
+                onChange({ ...profile, age: event.target.value })
+              }
+              required
+            />
+          </label>
+          <label>
+            <span>Gender</span>
+            <select
+              value={profile.gender}
+              onChange={(event) =>
+                onChange({ ...profile, gender: event.target.value })
+              }
+              required
+            >
+              <option value="">Select</option>
+              {genderOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Location</span>
+            <input
+              value={profile.location}
+              onChange={(event) =>
+                onChange({ ...profile, location: event.target.value })
+              }
+              placeholder="City, country"
+              autoComplete="address-level2"
+              required
+            />
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>Dietary restrictions</legend>
+          <div className="restriction-grid">
+            {restrictionOptions.map((restriction) => {
+              const selected = profile.restrictions.includes(restriction);
+              return (
+                <button
+                  type="button"
+                  key={restriction}
+                  className={selected ? "restriction selected" : "restriction"}
+                  onClick={() => onToggleRestriction(restriction)}
+                  aria-pressed={selected}
+                >
+                  <span>{selected && <Check size={14} />}</span>
+                  {restriction}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        {message && <p className="form-message">{message}</p>}
+        <button className="continue-button" disabled={busy}>
+          {busy ? "Saving…" : onboarding ? "Continue" : "Save"}
+        </button>
+      </form>
     </div>
   );
 }

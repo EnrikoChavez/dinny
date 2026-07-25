@@ -4,9 +4,21 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text,
   display_name text,
+  age smallint check (age between 1 and 120),
+  gender text,
+  location text,
+  dietary_restrictions text[] not null default '{}',
+  onboarding_complete boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  add column if not exists age smallint check (age between 1 and 120),
+  add column if not exists gender text,
+  add column if not exists location text,
+  add column if not exists dietary_restrictions text[] not null default '{}',
+  add column if not exists onboarding_complete boolean not null default false;
 
 create table if not exists public.user_preferences (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -49,6 +61,10 @@ create policy "Users can read their own profile"
 create policy "Users can update their own profile"
   on public.profiles for update
   using (auth.uid() = id);
+
+create policy "Users can insert their own profile"
+  on public.profiles for insert
+  with check (auth.uid() = id);
 
 create policy "Users can read their own preferences"
   on public.user_preferences for select
