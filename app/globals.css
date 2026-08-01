@@ -261,7 +261,10 @@ select:focus-visible {
   left: 0;
   z-index: 15;
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+  gap: 7px;
   padding: 36px 24px 24px;
   background: linear-gradient(
     to bottom,
@@ -269,6 +272,29 @@ select:focus-visible {
     rgba(247, 247, 244, 0.96) 32%
   );
   pointer-events: none;
+}
+
+.finding-recipes {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: transparent;
+  background: linear-gradient(90deg, #c7c7c0 0%, #706f68 50%, #c7c7c0 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shimmer 1.3s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .chat-form {

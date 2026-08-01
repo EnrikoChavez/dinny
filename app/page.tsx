@@ -643,6 +643,9 @@ export default function Home() {
 
       {view !== "last-used" && (
         <div className="chat-dock">
+          {recommendationLoading && (
+            <p className="finding-recipes">finding recipes</p>
+          )}
           <form className="chat-form" onSubmit={requestRecommendations}>
             <input
               value={prompt}
