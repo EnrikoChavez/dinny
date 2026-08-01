@@ -50,3 +50,4 @@ Import the repository in Vercel or run `vercel` from this directory. Add the
 same environment variables to the Vercel project, then redeploy. For Google
 sign-in, add `https://YOUR_DOMAIN/auth/callback` to the authorized redirect
 URLs in both Supabase and the Google OAuth client.
+
