@@ -205,18 +205,28 @@ select:focus-visible {
 .recipe-option {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   width: 100%;
   min-height: 72px;
-  padding: 14px 17px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.55);
-  text-align: left;
-  cursor: pointer;
   transition:
     border-color 150ms ease,
     background 150ms ease;
+}
+
+.recipe-option-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  flex: 1;
+  min-height: 70px;
+  padding: 14px 10px 14px 17px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
 }
 
 .recipe-option:hover {
@@ -224,7 +234,28 @@ select:focus-visible {
   background: var(--surface);
 }
 
-.recipe-option > span {
+.save-recipe-button {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  margin-right: 10px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.save-recipe-button:hover,
+.save-recipe-button.saved {
+  border-color: rgba(214, 84, 50, 0.22);
+  background: rgba(214, 84, 50, 0.08);
+  color: var(--accent);
+}
+
+.recipe-option-main > span {
   display: grid;
   gap: 6px;
 }
@@ -244,7 +275,7 @@ select:focus-visible {
   font-size: 12px;
 }
 
-.recipe-option > svg {
+.recipe-option-main > svg {
   color: #989893;
 }
 
@@ -532,6 +563,27 @@ select:focus-visible {
   color: #555551;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.save-detail-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: -18px 0 32px;
+  padding: 10px 15px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.save-detail-button.saved {
+  border-color: rgba(214, 84, 50, 0.22);
+  background: rgba(214, 84, 50, 0.08);
+  color: var(--accent);
 }
 
 .cooked-button {
