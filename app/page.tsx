@@ -37,6 +37,7 @@ type StoredPreferenceRow = {
   high_protein: boolean;
   max_cook_minutes: number | null;
   spice_level: number | null;
+  bitterness_level: number | null;
   calorie_goal: number | null;
   preference_notes: string;
 };
@@ -201,7 +202,7 @@ export default function Home() {
         accountSupabase
           .from("user_preferences")
           .select(
-            "vegetarian, vegan, gluten_free, lactose_free, high_protein, max_cook_minutes, spice_level, calorie_goal, preference_notes",
+            "vegetarian, vegan, gluten_free, lactose_free, high_protein, max_cook_minutes, spice_level, bitterness_level, calorie_goal, preference_notes",
           )
           .eq("user_id", accountUser.id)
           .maybeSingle<StoredPreferenceRow>(),
@@ -242,6 +243,7 @@ export default function Home() {
         highProtein: preferenceData?.high_protein ?? false,
         maxCookMinutes: preferenceData?.max_cook_minutes ?? null,
         spiceLevel: preferenceData?.spice_level ?? null,
+        bitternessLevel: preferenceData?.bitterness_level ?? null,
         calorieGoal: preferenceData?.calorie_goal ?? null,
         favoriteCuisines: (cuisineData ?? []).map((item) => item.cuisine),
         preferenceNotes: preferenceData?.preference_notes ?? "",
@@ -328,6 +330,7 @@ export default function Home() {
             high_protein: preferences.highProtein,
             max_cook_minutes: preferences.maxCookMinutes,
             spice_level: preferences.spiceLevel,
+            bitterness_level: preferences.bitternessLevel,
             calorie_goal: preferences.calorieGoal,
             preference_notes: preferences.preferenceNotes,
             updated_at: new Date().toISOString(),
@@ -758,6 +761,13 @@ function PreferencesView({
         preferences.spiceLevel === null
           ? "Not set"
           : `${preferences.spiceLevel} / 5`,
+    },
+    {
+      label: "Bitterness",
+      value:
+        preferences.bitternessLevel === null
+          ? "Not set"
+          : `${preferences.bitternessLevel} / 5`,
     },
     {
       label: "Calories",

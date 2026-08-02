@@ -15,6 +15,7 @@ export type PreferenceSnapshot = {
   highProtein: boolean;
   maxCookMinutes: number | null;
   spiceLevel: number | null;
+  bitternessLevel: number | null;
   calorieGoal: number | null;
   favoriteCuisines: string[];
   preferenceNotes: string;
@@ -25,6 +26,7 @@ export const emptyPreferenceSnapshot: PreferenceSnapshot = {
   highProtein: false,
   maxCookMinutes: null,
   spiceLevel: null,
+  bitternessLevel: null,
   calorieGoal: null,
   favoriteCuisines: [],
   preferenceNotes: "",
