@@ -32,7 +32,6 @@ type StoredPreferenceRow = {
   vegetarian: boolean;
   vegan: boolean;
   gluten_free: boolean;
-  lactose_free: boolean;
   high_protein: boolean;
   max_cook_minutes: number | null;
   spice_level: number | null;
@@ -201,7 +200,7 @@ export default function Home() {
         accountSupabase
           .from("user_preferences")
           .select(
-            "vegetarian, vegan, gluten_free, lactose_free, high_protein, max_cook_minutes, spice_level, bitterness_level, calorie_goal, preference_notes",
+            "vegetarian, vegan, gluten_free, high_protein, max_cook_minutes, spice_level, bitterness_level, calorie_goal, preference_notes",
           )
           .eq("user_id", accountUser.id)
           .maybeSingle<StoredPreferenceRow>(),
@@ -234,7 +233,6 @@ export default function Home() {
       if (preferenceData?.vegetarian) restrictionSet.add("Vegetarian");
       if (preferenceData?.vegan) restrictionSet.add("Vegan");
       if (preferenceData?.gluten_free) restrictionSet.add("Gluten-free");
-      if (preferenceData?.lactose_free) restrictionSet.add("Dairy-free");
       const nextPreferences: PreferenceSnapshot = {
         dietaryRestrictions: normalizeDietaryRestrictions([
           ...restrictionSet,
@@ -325,7 +323,6 @@ export default function Home() {
             vegetarian: nextProfile.restrictions.includes("Vegetarian"),
             vegan: nextProfile.restrictions.includes("Vegan"),
             gluten_free: nextProfile.restrictions.includes("Gluten-free"),
-            lactose_free: nextProfile.restrictions.includes("Dairy-free"),
             high_protein: preferences.highProtein,
             max_cook_minutes: preferences.maxCookMinutes,
             spice_level: preferences.spiceLevel,

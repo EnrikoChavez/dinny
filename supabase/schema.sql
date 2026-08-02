@@ -25,7 +25,6 @@ create table if not exists public.user_preferences (
   vegetarian boolean not null default false,
   vegan boolean not null default false,
   gluten_free boolean not null default false,
-  lactose_free boolean not null default false,
   high_protein boolean not null default false,
   max_cook_minutes integer,
   spice_level smallint check (spice_level between 0 and 5),
@@ -38,6 +37,9 @@ create table if not exists public.user_preferences (
 alter table public.user_preferences
   add column if not exists preference_notes text not null default '',
   add column if not exists bitterness_level smallint check (bitterness_level between 0 and 5);
+
+alter table public.user_preferences
+  drop column if exists lactose_free;
 
 create table if not exists public.cuisine_preferences (
   user_id uuid not null references auth.users(id) on delete cascade,
