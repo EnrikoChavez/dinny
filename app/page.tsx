@@ -29,15 +29,15 @@ import {
 type View = "home" | "last-used" | "preferences";
 type HistoryItem = { recipe: Recipe; usedAt: string };
 type StoredPreferenceRow = {
-  vegetarian: boolean;
-  vegan: boolean;
-  gluten_free: boolean;
-  high_protein: boolean;
-  max_cook_minutes: number | null;
-  spice_level: number | null;
-  bitterness_level: number | null;
-  calorie_goal: number | null;
-  preference_notes: string;
+  vegetarian?: boolean;
+  vegan?: boolean;
+  gluten_free?: boolean;
+  high_protein?: boolean;
+  max_cook_minutes?: number | null;
+  spice_level?: number | null;
+  bitterness_level?: number | null;
+  calorie_goal?: number | null;
+  preference_notes?: string;
 };
 type Profile = {
   displayName: string;
@@ -199,9 +199,7 @@ export default function Home() {
           .maybeSingle(),
         accountSupabase
           .from("user_preferences")
-          .select(
-            "vegetarian, vegan, gluten_free, high_protein, max_cook_minutes, spice_level, bitterness_level, calorie_goal, preference_notes",
-          )
+          .select("*")
           .eq("user_id", accountUser.id)
           .maybeSingle<StoredPreferenceRow>(),
         accountSupabase
@@ -289,8 +287,6 @@ export default function Home() {
 
     setProfileBusy(true);
     setProfileMessage("");
-    const completingOnboarding = !profile.complete;
-
     const nextProfile: Profile = {
       ...profileDraft,
       displayName: profileDraft.displayName.trim(),
@@ -298,46 +294,20 @@ export default function Home() {
       complete: true,
     };
 
-    const writes = [
-      supabase.from("profiles").upsert(
-        {
-          id: user.id,
-          email: user.email,
-          display_name: nextProfile.displayName,
-          age,
-          gender: nextProfile.gender || null,
-          location: nextProfile.location,
-          dietary_restrictions: nextProfile.restrictions,
-          onboarding_complete: true,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" },
-      ),
-    ];
-
-    if (completingOnboarding) {
-      writes.push(
-        supabase.from("user_preferences").upsert(
-          {
-            user_id: user.id,
-            vegetarian: nextProfile.restrictions.includes("Vegetarian"),
-            vegan: nextProfile.restrictions.includes("Vegan"),
-            gluten_free: nextProfile.restrictions.includes("Gluten-free"),
-            high_protein: preferences.highProtein,
-            max_cook_minutes: preferences.maxCookMinutes,
-            spice_level: preferences.spiceLevel,
-            bitterness_level: preferences.bitternessLevel,
-            calorie_goal: preferences.calorieGoal,
-            preference_notes: preferences.preferenceNotes,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" },
-        ),
-      );
-    }
-
-    const results = await Promise.all(writes);
-    const error = results.find((result) => result.error)?.error;
+    const { error } = await supabase.from("profiles").upsert(
+      {
+        id: user.id,
+        email: user.email,
+        display_name: nextProfile.displayName,
+        age,
+        gender: nextProfile.gender || null,
+        location: nextProfile.location,
+        dietary_restrictions: nextProfile.restrictions,
+        onboarding_complete: true,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    );
 
     setProfileBusy(false);
     if (error) {

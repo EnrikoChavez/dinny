@@ -24,15 +24,15 @@ type StoredProfile = {
 };
 
 type StoredPreferences = {
-  vegetarian: boolean;
-  vegan: boolean;
-  gluten_free: boolean;
-  high_protein: boolean;
-  max_cook_minutes: number | null;
-  spice_level: number | null;
-  bitterness_level: number | null;
-  calorie_goal: number | null;
-  preference_notes: string;
+  vegetarian?: boolean;
+  vegan?: boolean;
+  gluten_free?: boolean;
+  high_protein?: boolean;
+  max_cook_minutes?: number | null;
+  spice_level?: number | null;
+  bitterness_level?: number | null;
+  calorie_goal?: number | null;
+  preference_notes?: string;
 };
 
 type StoredCuisinePreference = {
@@ -321,15 +321,17 @@ function toPreferenceSnapshot(
 
   return {
     dietaryRestrictions: normalizeDietaryRestrictions([...restrictions]),
-    highProtein: preferences.high_protein,
-    maxCookMinutes: preferences.max_cook_minutes,
-    spiceLevel: preferences.spice_level,
-    bitternessLevel: preferences.bitterness_level,
-    calorieGoal: preferences.calorie_goal,
+    highProtein: preferences.high_protein ?? false,
+    maxCookMinutes: preferences.max_cook_minutes ?? null,
+    spiceLevel: preferences.spice_level ?? null,
+    bitternessLevel: preferences.bitterness_level ?? null,
+    calorieGoal: preferences.calorie_goal ?? null,
     favoriteCuisines: normalizeCuisines(
       cuisines.map((item) => item.cuisine),
     ),
-    preferenceNotes: normalizePreferenceNotes(preferences.preference_notes),
+    preferenceNotes: normalizePreferenceNotes(
+      preferences.preference_notes ?? "",
+    ),
   };
 }
 
@@ -444,9 +446,7 @@ export async function POST(request: Request) {
       .maybeSingle<StoredProfile>(),
     supabase
       .from("user_preferences")
-      .select(
-        "vegetarian, vegan, gluten_free, high_protein, max_cook_minutes, spice_level, bitterness_level, calorie_goal, preference_notes",
-      )
+      .select("*")
       .eq("user_id", user.id)
       .maybeSingle<StoredPreferences>(),
     supabase
@@ -486,8 +486,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const storedPreferences =
-    preferencesResult.data ?? defaultStoredPreferences;
+  const storedPreferenceRow = preferencesResult.data;
+  const storedPreferences = {
+    ...defaultStoredPreferences,
+    ...storedPreferenceRow,
+  };
+  const availablePreferenceColumns = new Set(
+    Object.keys(storedPreferenceRow ?? {}),
+  );
   const storedCuisines = cuisineResult.data ?? [];
   const currentPreferences = toPreferenceSnapshot(
     profile.dietary_restrictions ?? [],
@@ -644,22 +650,27 @@ export async function POST(request: Request) {
     }
 
     if (standardPreferencesChanged) {
+      const preferenceValues: Record<string, unknown> = {
+        vegetarian:
+          nextPreferences.dietaryRestrictions.includes("Vegetarian"),
+        vegan: nextPreferences.dietaryRestrictions.includes("Vegan"),
+        gluten_free:
+          nextPreferences.dietaryRestrictions.includes("Gluten-free"),
+        high_protein: nextPreferences.highProtein,
+        max_cook_minutes: nextPreferences.maxCookMinutes,
+        spice_level: nextPreferences.spiceLevel,
+        bitterness_level: nextPreferences.bitternessLevel,
+        calorie_goal: nextPreferences.calorieGoal,
+        preference_notes: nextPreferences.preferenceNotes,
+        updated_at: new Date().toISOString(),
+      };
+      const supportedPreferenceValues = Object.fromEntries(
+        Object.entries(preferenceValues).filter(([column]) =>
+          availablePreferenceColumns.has(column),
+        ),
+      );
       const { error } = await supabase.from("user_preferences").upsert(
-        {
-          user_id: user.id,
-          vegetarian:
-            nextPreferences.dietaryRestrictions.includes("Vegetarian"),
-          vegan: nextPreferences.dietaryRestrictions.includes("Vegan"),
-          gluten_free:
-            nextPreferences.dietaryRestrictions.includes("Gluten-free"),
-          high_protein: nextPreferences.highProtein,
-          max_cook_minutes: nextPreferences.maxCookMinutes,
-          spice_level: nextPreferences.spiceLevel,
-          bitterness_level: nextPreferences.bitternessLevel,
-          calorie_goal: nextPreferences.calorieGoal,
-          preference_notes: nextPreferences.preferenceNotes,
-          updated_at: new Date().toISOString(),
-        },
+        { user_id: user.id, ...supportedPreferenceValues },
         { onConflict: "user_id" },
       );
 
