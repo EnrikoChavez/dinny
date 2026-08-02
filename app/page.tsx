@@ -4,7 +4,6 @@ import type { User } from "@supabase/supabase-js";
 import {
   ArrowUp,
   Check,
-  ChevronRight,
   Clock3,
   History,
   LogOut,
@@ -805,13 +804,13 @@ function RecipeOption({
 }) {
   return (
     <button className="recipe-option" onClick={() => onOpen(recipe)}>
-      <span>
+      <img src={recipe.image} alt="" />
+      <span className="recipe-option-content">
         <strong>{recipe.title}</strong>
         <small>
-          <Clock3 size={13} /> {recipe.time} min · {recipe.cuisine}
+          <Clock3 size={13} /> {recipe.time} min
         </small>
       </span>
-      <ChevronRight size={17} />
     </button>
   );
 }

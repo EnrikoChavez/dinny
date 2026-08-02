@@ -199,34 +199,66 @@ select:focus-visible {
 
 .recipe-options {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .recipe-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  position: relative;
+  display: block;
   width: 100%;
-  min-height: 72px;
-  padding: 14px 17px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.55);
+  aspect-ratio: 1;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: #ddd;
   text-align: left;
   cursor: pointer;
   transition:
-    border-color 150ms ease,
-    background 150ms ease;
+    box-shadow 150ms ease,
+    transform 150ms ease;
 }
 
 .recipe-option:hover {
-  border-color: #bdbdb7;
-  background: var(--surface);
+  box-shadow: 0 10px 22px rgba(32, 32, 30, 0.16);
+  transform: translateY(-2px);
 }
 
-.recipe-option > span {
+.recipe-option:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.recipe-option > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 200ms ease;
+}
+
+.recipe-option:hover > img {
+  transform: scale(1.04);
+}
+
+.recipe-option::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 62%;
+  background: linear-gradient(transparent, rgba(18, 18, 16, 0.82));
+  content: "";
+}
+
+.recipe-option-content {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  z-index: 1;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .recipe-option strong,
@@ -240,12 +272,21 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: var(--muted);
   font-size: 12px;
 }
 
-.recipe-option > svg {
-  color: #989893;
+.recipe-option small {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.history-row small {
+  color: var(--muted);
+}
+
+.recipe-option strong {
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.2;
 }
 
 .assistant-message {
@@ -823,10 +864,6 @@ select:focus-visible {
 
   .home-heading {
     margin-bottom: 26px;
-  }
-
-  .recipe-option {
-    min-height: 68px;
   }
 
   .chat-dock {
