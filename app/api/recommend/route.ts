@@ -27,7 +27,6 @@ type StoredPreferences = {
   vegetarian: boolean;
   vegan: boolean;
   gluten_free: boolean;
-  lactose_free: boolean;
   high_protein: boolean;
   max_cook_minutes: number | null;
   spice_level: number | null;
@@ -73,7 +72,6 @@ const defaultStoredPreferences: StoredPreferences = {
   vegetarian: false,
   vegan: false,
   gluten_free: false,
-  lactose_free: false,
   high_protein: false,
   max_cook_minutes: null,
   spice_level: null,
@@ -320,7 +318,6 @@ function toPreferenceSnapshot(
   if (preferences.vegetarian) restrictions.add("Vegetarian");
   if (preferences.vegan) restrictions.add("Vegan");
   if (preferences.gluten_free) restrictions.add("Gluten-free");
-  if (preferences.lactose_free) restrictions.add("Dairy-free");
 
   return {
     dietaryRestrictions: normalizeDietaryRestrictions([...restrictions]),
@@ -448,7 +445,7 @@ export async function POST(request: Request) {
     supabase
       .from("user_preferences")
       .select(
-        "vegetarian, vegan, gluten_free, lactose_free, high_protein, max_cook_minutes, spice_level, bitterness_level, calorie_goal, preference_notes",
+        "vegetarian, vegan, gluten_free, high_protein, max_cook_minutes, spice_level, bitterness_level, calorie_goal, preference_notes",
       )
       .eq("user_id", user.id)
       .maybeSingle<StoredPreferences>(),
@@ -655,8 +652,6 @@ export async function POST(request: Request) {
           vegan: nextPreferences.dietaryRestrictions.includes("Vegan"),
           gluten_free:
             nextPreferences.dietaryRestrictions.includes("Gluten-free"),
-          lactose_free:
-            nextPreferences.dietaryRestrictions.includes("Dairy-free"),
           high_protein: nextPreferences.highProtein,
           max_cook_minutes: nextPreferences.maxCookMinutes,
           spice_level: nextPreferences.spiceLevel,
