@@ -31,6 +31,7 @@ type StoredPreferences = {
   high_protein: boolean;
   max_cook_minutes: number | null;
   spice_level: number | null;
+  bitterness_level: number | null;
   calorie_goal: number | null;
   preference_notes: string;
 };
@@ -56,6 +57,7 @@ type PreferenceChanges = {
   highProtein: PreferenceChange<boolean>;
   maxCookMinutes: PreferenceChange<number | null>;
   spiceLevel: PreferenceChange<number | null>;
+  bitternessLevel: PreferenceChange<number | null>;
   calorieGoal: PreferenceChange<number | null>;
   favoriteCuisines: PreferenceChange<string[]>;
   preferenceNotes: PreferenceChange<string>;
@@ -75,6 +77,7 @@ const defaultStoredPreferences: StoredPreferences = {
   high_protein: false,
   max_cook_minutes: null,
   spice_level: null,
+  bitterness_level: null,
   calorie_goal: null,
   preference_notes: "",
 };
@@ -158,6 +161,7 @@ const responseSchema = {
         highProtein: preferenceFieldSchema({ type: "boolean" }),
         maxCookMinutes: preferenceFieldSchema(nullableIntegerSchema(5, 240)),
         spiceLevel: preferenceFieldSchema(nullableIntegerSchema(0, 5)),
+        bitternessLevel: preferenceFieldSchema(nullableIntegerSchema(0, 5)),
         calorieGoal: preferenceFieldSchema(
           nullableIntegerSchema(200, 5000),
         ),
@@ -176,6 +180,7 @@ const responseSchema = {
         "highProtein",
         "maxCookMinutes",
         "spiceLevel",
+        "bitternessLevel",
         "calorieGoal",
         "favoriteCuisines",
         "preferenceNotes",
@@ -216,7 +221,7 @@ const recommendationSystemPrompt = [
   "Dietary restrictions are hard constraints for recipes.",
   "Treat preferenceNotes as recommendation context.",
   "Avoid recently cooked and recently shown recipes unless explicitly requested.",
-  "Honor cooking-time, protein, spice, calorie, cuisine, and free-form preferences unless the current request overrides a soft preference.",
+  "Honor cooking-time, protein, spice, bitterness, calorie, cuisine, and free-form preferences unless the current request overrides a soft preference.",
   "Use location only for accessible ingredients and conventions.",
   "Keep ingredients common, steps concise, estimates honest, and message under twelve words.",
   "When preferences change, use the short message to confirm what Dinny remembered.",
@@ -322,6 +327,7 @@ function toPreferenceSnapshot(
     highProtein: preferences.high_protein,
     maxCookMinutes: preferences.max_cook_minutes,
     spiceLevel: preferences.spice_level,
+    bitternessLevel: preferences.bitterness_level,
     calorieGoal: preferences.calorie_goal,
     favoriteCuisines: normalizeCuisines(
       cuisines.map((item) => item.cuisine),
@@ -356,6 +362,9 @@ function applyPreferenceChanges(
     spiceLevel: changes.spiceLevel.changed
       ? nullableInteger(changes.spiceLevel.value, 0, 5)
       : current.spiceLevel,
+    bitternessLevel: changes.bitternessLevel.changed
+      ? nullableInteger(changes.bitternessLevel.value, 0, 5)
+      : current.bitternessLevel,
     calorieGoal: changes.calorieGoal.changed
       ? nullableInteger(changes.calorieGoal.value, 200, 5000)
       : current.calorieGoal,
@@ -439,7 +448,7 @@ export async function POST(request: Request) {
     supabase
       .from("user_preferences")
       .select(
-        "vegetarian, vegan, gluten_free, lactose_free, high_protein, max_cook_minutes, spice_level, calorie_goal, preference_notes",
+        "vegetarian, vegan, gluten_free, lactose_free, high_protein, max_cook_minutes, spice_level, bitterness_level, calorie_goal, preference_notes",
       )
       .eq("user_id", user.id)
       .maybeSingle<StoredPreferences>(),
@@ -497,6 +506,7 @@ export async function POST(request: Request) {
       Number(currentPreferences.highProtein) +
       Number(currentPreferences.maxCookMinutes != null) +
       Number(currentPreferences.spiceLevel != null) +
+      Number(currentPreferences.bitternessLevel != null) +
       Number(currentPreferences.calorieGoal != null) +
       currentPreferences.favoriteCuisines.length +
       Number(Boolean(currentPreferences.preferenceNotes)),
@@ -614,6 +624,7 @@ export async function POST(request: Request) {
       parsed.preferenceChanges.highProtein.changed ||
       parsed.preferenceChanges.maxCookMinutes.changed ||
       parsed.preferenceChanges.spiceLevel.changed ||
+      parsed.preferenceChanges.bitternessLevel.changed ||
       parsed.preferenceChanges.calorieGoal.changed ||
       parsed.preferenceChanges.preferenceNotes.changed;
 
@@ -649,6 +660,7 @@ export async function POST(request: Request) {
           high_protein: nextPreferences.highProtein,
           max_cook_minutes: nextPreferences.maxCookMinutes,
           spice_level: nextPreferences.spiceLevel,
+          bitterness_level: nextPreferences.bitternessLevel,
           calorie_goal: nextPreferences.calorieGoal,
           preference_notes: nextPreferences.preferenceNotes,
           updated_at: new Date().toISOString(),
