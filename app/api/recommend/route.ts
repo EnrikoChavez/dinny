@@ -9,7 +9,7 @@ import {
   normalizePreferenceNotes,
   type PreferenceSnapshot,
 } from "@/lib/preferences";
-import { recipeImages, recipes, type Recipe } from "@/lib/recipes";
+import { recipes, type Recipe } from "@/lib/recipes";
 
 type RequestBody = {
   prompt?: string;
@@ -65,7 +65,7 @@ type PreferenceChanges = {
 type AiResponse = {
   message: string;
   preferenceChanges: PreferenceChanges;
-  recipes: Array<Omit<Recipe, "image">>;
+  recipes: Recipe[];
 };
 
 const defaultStoredPreferences: StoredPreferences = {
@@ -737,10 +737,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     message: parsed.message,
-    recipes: parsed.recipes.map((recipe, index) => ({
-      ...recipe,
-      image: recipeImages[index % recipeImages.length],
-    })),
+    recipes: parsed.recipes,
     mode: "ai",
     preferences: nextPreferences,
     preferencesUpdated: preferenceUpdateRequested,

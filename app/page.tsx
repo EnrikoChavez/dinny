@@ -781,7 +781,6 @@ function RecipeOption({
 }) {
   return (
     <button className="recipe-option" onClick={() => onOpen(recipe)}>
-      <img src={recipe.image} alt="" />
       <span className="recipe-option-content">
         <strong>{recipe.title}</strong>
         <small>

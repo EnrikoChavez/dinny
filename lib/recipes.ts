@@ -2,7 +2,6 @@ export type Recipe = {
   id: string;
   title: string;
   summary: string;
-  image: string;
   time: number;
   calories: number;
   cuisine: string;
@@ -13,22 +12,12 @@ export type Recipe = {
   why: string;
 };
 
-export const recipeImages = [
-  "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=1200&q=85",
-  "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=1200&q=85",
-  "https://images.unsplash.com/photo-1466637574441-749b8f19452f?auto=format&fit=crop&w=1200&q=85",
-  "https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=1200&q=85",
-  "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1200&q=85",
-  "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=1200&q=85",
-];
-
 export const recipes: Recipe[] = [
   {
     id: "harissa-salmon-bowl",
     title: "Harissa salmon bowl",
     summary:
       "Roasted salmon, lemony grains, cucumber, herbs, and a quick yogurt drizzle.",
-    image: recipeImages[0],
     time: 28,
     calories: 590,
     cuisine: "Mediterranean",
@@ -56,7 +45,6 @@ export const recipes: Recipe[] = [
     title: "Silky tomato basil pasta",
     summary:
       "A glossy one-pan tomato sauce with basil, parmesan, and a little pasta water magic.",
-    image: recipeImages[1],
     time: 24,
     calories: 540,
     cuisine: "Italian",
@@ -84,7 +72,6 @@ export const recipes: Recipe[] = [
     title: "Miso honey chicken",
     summary:
       "Caramelized chicken thighs and sesame vegetables on one very useful sheet pan.",
-    image: recipeImages[2],
     time: 35,
     calories: 620,
     cuisine: "Japanese-inspired",
@@ -112,7 +99,6 @@ export const recipes: Recipe[] = [
     title: "Green goddess tacos",
     summary:
       "Crispy spiced chickpeas, avocado, crunchy cabbage, and a bright herb sauce.",
-    image: recipeImages[3],
     time: 22,
     calories: 510,
     cuisine: "Mexican-inspired",
@@ -148,7 +134,6 @@ export const recipes: Recipe[] = [
     title: "Tahini crunch salad",
     summary:
       "Roasted sweet potato, avocado, greens, herbs, and a lemon-tahini dressing.",
-    image: recipeImages[4],
     time: 30,
     calories: 480,
     cuisine: "Middle Eastern-inspired",
@@ -184,7 +169,6 @@ export const recipes: Recipe[] = [
     title: "Lemony pea orzo",
     summary:
       "Creamy orzo with sweet peas, spinach, lemon, and a shower of pecorino.",
-    image: recipeImages[5],
     time: 20,
     calories: 500,
     cuisine: "Italian",
