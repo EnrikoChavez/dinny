@@ -199,34 +199,29 @@ select:focus-visible {
 
 .recipe-options {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .recipe-option {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: space-between;
   width: 100%;
-  aspect-ratio: 1;
-  padding: 13px;
+  min-height: 72px;
+  padding: 14px 17px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.7);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
   text-align: left;
   cursor: pointer;
   transition:
     border-color 150ms ease,
-    background 150ms ease,
-    box-shadow 150ms ease,
-    transform 150ms ease;
+    background 150ms ease;
 }
 
 .recipe-option:hover {
   border-color: #bdbdb7;
   background: var(--surface);
-  box-shadow: 0 10px 22px rgba(32, 32, 30, 0.16);
-  transform: translateY(-2px);
 }
 
 .recipe-option:focus-visible {
@@ -234,18 +229,9 @@ select:focus-visible {
   outline-offset: 3px;
 }
 
-.recipe-option-content {
+.recipe-option > span {
   display: grid;
-  gap: 4px;
-}
-
-.recipe-option-cuisine {
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  line-height: 1.2;
-  text-transform: uppercase;
+  gap: 6px;
 }
 
 .recipe-option strong,
@@ -272,8 +258,10 @@ select:focus-visible {
 
 .recipe-option strong {
   color: var(--ink);
-  font-size: 13px;
-  line-height: 1.2;
+}
+
+.recipe-option > svg {
+  color: #989893;
 }
 
 .assistant-message {
@@ -851,6 +839,10 @@ select:focus-visible {
 
   .home-heading {
     margin-bottom: 26px;
+  }
+
+  .recipe-option {
+    min-height: 68px;
   }
 
   .chat-dock {
