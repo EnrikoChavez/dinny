@@ -781,6 +781,7 @@ function RecipeOption({
 }) {
   return (
     <button className="recipe-option" onClick={() => onOpen(recipe)}>
+      <span className="recipe-option-cuisine">{recipe.cuisine}</span>
       <span className="recipe-option-content">
         <strong>{recipe.title}</strong>
         <small>

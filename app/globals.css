@@ -204,23 +204,27 @@ select:focus-visible {
 }
 
 .recipe-option {
-  position: relative;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   width: 100%;
   aspect-ratio: 1;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: linear-gradient(155deg, var(--accent), var(--accent-dark));
+  background: rgba(255, 255, 255, 0.7);
   text-align: left;
   cursor: pointer;
   transition:
+    border-color 150ms ease,
+    background 150ms ease,
     box-shadow 150ms ease,
     transform 150ms ease;
 }
 
 .recipe-option:hover {
+  border-color: #bdbdb7;
+  background: var(--surface);
   box-shadow: 0 10px 22px rgba(32, 32, 30, 0.16);
   transform: translateY(-2px);
 }
@@ -230,24 +234,18 @@ select:focus-visible {
   outline-offset: 3px;
 }
 
-.recipe-option::after {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 62%;
-  background: linear-gradient(transparent, rgba(18, 18, 16, 0.55));
-  content: "";
-}
-
 .recipe-option-content {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  left: 10px;
-  z-index: 1;
   display: grid;
   gap: 4px;
+}
+
+.recipe-option-cuisine {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .recipe-option strong,
@@ -265,7 +263,7 @@ select:focus-visible {
 }
 
 .recipe-option small {
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--muted);
 }
 
 .history-row small {
@@ -273,7 +271,7 @@ select:focus-visible {
 }
 
 .recipe-option strong {
-  color: #fff;
+  color: var(--ink);
   font-size: 13px;
   line-height: 1.2;
 }
