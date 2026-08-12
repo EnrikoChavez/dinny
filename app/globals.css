@@ -443,6 +443,42 @@ select:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 
+.saved-recipe-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.saved-recipe-card > span,
+.saved-recipe-card > div {
+  display: grid;
+  gap: 5px;
+}
+
+.saved-recipe-card > div {
+  justify-items: end;
+}
+
+.saved-recipe-card time {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.saved-recipe-card button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 .cook-again-card-top,
 .reflection-row {
   display: flex;
@@ -508,6 +544,41 @@ select:focus-visible {
   color: var(--accent);
 }
 
+.recipe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.recipe-actions .cooked-button {
+  margin-top: 0;
+}
+
+.save-recipe-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 24px;
+  padding: 11px 15px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.save-recipe-button.saved {
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.save-recipe-button:disabled {
+  cursor: default;
+}
+
 .empty-copy {
   color: var(--muted);
   font-size: 14px;
@@ -515,10 +586,15 @@ select:focus-visible {
 
 @media (max-width: 560px) {
   .cook-again-card-top,
-  .reflection-row {
+  .reflection-row,
+  .saved-recipe-card {
     align-items: flex-start;
     flex-direction: column;
     gap: 9px;
+  }
+
+  .saved-recipe-card > div {
+    justify-items: start;
   }
 
   .cooked-date {

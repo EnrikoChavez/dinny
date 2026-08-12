@@ -4,6 +4,7 @@ import type { User } from "@supabase/supabase-js";
 import {
   ArrowUp,
   Ban,
+  Bookmark,
   Check,
   ChefHat,
   ChevronRight,
@@ -37,12 +38,13 @@ import {
   hasSupabaseConfig,
 } from "@/lib/supabase-browser";
 
-type View = "home" | "cook-again" | "preferences";
+type View = "home" | "cook-again" | "want-to-cook" | "preferences";
 type HistoryItem = {
   recipe: Recipe;
   usedAt: string;
   rating: number | null;
 };
+type SavedRecipeItem = { recipe: Recipe; savedAt: string };
 type StoredPreferenceRow = {
   foods_to_avoid?: string;
   foods_to_prefer?: string;
@@ -147,6 +149,7 @@ export default function Home() {
   const [assistantMessage, setAssistantMessage] = useState("");
   const [recommendationLoading, setRecommendationLoading] = useState(false);
   const [cookedRecipes, setCookedRecipes] = useState<HistoryItem[]>([]);
+  const [savedRecipes, setSavedRecipes] = useState<SavedRecipeItem[]>([]);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
   useEffect(() => {
@@ -189,6 +192,7 @@ export default function Home() {
         setProfileReady(true);
         setRecommendations(initialRecipes.slice(0, 3));
         setCookedRecipes([]);
+        setSavedRecipes([]);
       });
       return;
     }
@@ -202,6 +206,7 @@ export default function Home() {
         { data: profileData },
         { data: preferenceData },
         { data: historyData },
+        { data: savedData },
       ] = await Promise.all([
         accountSupabase
           .from("profiles")
@@ -220,6 +225,12 @@ export default function Home() {
           .select("recipe, used_at, rating")
           .eq("user_id", accountUser.id)
           .order("used_at", { ascending: false })
+          .limit(20),
+        accountSupabase
+          .from("saved_recipes")
+          .select("recipe, saved_at")
+          .eq("user_id", accountUser.id)
+          .order("saved_at", { ascending: false })
           .limit(20),
       ]);
 
@@ -269,6 +280,12 @@ export default function Home() {
         rankRecipes(nextPreferences, nextProfile.restrictions, cloudHistory),
       );
       setCookedRecipes(cloudHistory);
+      setSavedRecipes(
+        (savedData ?? []).map((item) => ({
+          recipe: item.recipe as Recipe,
+          savedAt: item.saved_at as string,
+        })),
+      );
       setProfileReady(true);
     }
 
@@ -408,6 +425,31 @@ export default function Home() {
         },
         { onConflict: "user_id,recipe_id" },
       );
+    }
+  }
+
+  async function saveRecipe(recipe: Recipe) {
+    const entry: SavedRecipeItem = { recipe, savedAt: new Date().toISOString() };
+    setSavedRecipes((current) => [
+      entry,
+      ...current.filter((item) => item.recipe.id !== recipe.id),
+    ].slice(0, 20));
+
+    if (user && supabase) {
+      const { error } = await supabase.from("saved_recipes").upsert(
+        {
+          user_id: user.id,
+          recipe_id: recipe.id,
+          recipe,
+          saved_at: entry.savedAt,
+        },
+        { onConflict: "user_id,recipe_id" },
+      );
+      if (error) {
+        setSavedRecipes((current) =>
+          current.filter((item) => item.recipe.id !== recipe.id),
+        );
+      }
     }
   }
 
@@ -570,6 +612,14 @@ export default function Home() {
           </button>
           {user && (
             <button
+              className={view === "want-to-cook" ? "nav-link active" : "nav-link"}
+              onClick={() => setView("want-to-cook")}
+            >
+              Want to cook
+            </button>
+          )}
+          {user && (
+            <button
               className={
                 view === "preferences" ? "nav-link active" : "nav-link"
               }
@@ -694,6 +744,35 @@ export default function Home() {
               <p className="empty-copy">Recipes you make will live here—ready for an easy repeat.</p>
             )}
           </section>
+        ) : view === "want-to-cook" ? (
+          <section className="history-view">
+            <div className="view-heading">
+              <Bookmark size={18} />
+              <div>
+                <h1>Want to cook</h1>
+                <p>Recipes you saved for a future meal.</p>
+              </div>
+            </div>
+
+            {savedRecipes.length ? (
+              <div className="history-list saved-recipe-list">
+                {savedRecipes.map((item) => (
+                  <article key={`${item.recipe.id}-${item.savedAt}`} className="saved-recipe-card">
+                    <span>
+                      <strong>{item.recipe.title}</strong>
+                      <small>{item.recipe.time} min · {item.recipe.cuisine}</small>
+                    </span>
+                    <div>
+                      <time>Saved {formatHistoryDate(item.savedAt)}</time>
+                      <button onClick={() => openRecipe(item.recipe)}>View recipe</button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-copy">Save a recipe from its details to keep it here.</p>
+            )}
+          </section>
         ) : (
           <PreferencesView
             preferences={preferences}
@@ -706,7 +785,7 @@ export default function Home() {
         )}
       </main>
 
-      {view !== "cook-again" && (
+      {view !== "cook-again" && view !== "want-to-cook" && (
         <div className="chat-dock">
           {recommendationLoading && (
             <p className="finding-recipes">finding recipes</p>
@@ -750,9 +829,17 @@ export default function Home() {
                 }
               : undefined
           }
+          onSave={
+            user
+              ? () => {
+                  void saveRecipe(selectedRecipe);
+                }
+              : undefined
+          }
           cooked={cookedRecipes.some(
             (item) => item.recipe.id === selectedRecipe.id,
           )}
+          saved={savedRecipes.some((item) => item.recipe.id === selectedRecipe.id)}
         />
       )}
 
@@ -1005,12 +1092,16 @@ function RecipeDetail({
   recipe,
   onClose,
   onCooked,
+  onSave,
   cooked,
+  saved,
 }: {
   recipe: Recipe;
   onClose: () => void;
   onCooked?: () => void;
+  onSave?: () => void;
   cooked: boolean;
+  saved: boolean;
 }) {
   return (
     <div className="overlay" role="presentation" onMouseDown={onClose}>
@@ -1048,15 +1139,29 @@ function RecipeDetail({
             </ol>
           </section>
         </div>
-        {onCooked && (
-          <button
-            className={cooked ? "cooked-button complete" : "cooked-button"}
-            onClick={onCooked}
-            disabled={cooked}
-          >
-            {cooked && <Check size={15} />}
-            {cooked ? "Made" : "Made this"}
-          </button>
+        {(onCooked || onSave) && (
+          <div className="recipe-actions">
+            {onCooked && (
+              <button
+                className={cooked ? "cooked-button complete" : "cooked-button"}
+                onClick={onCooked}
+                disabled={cooked}
+              >
+                {cooked && <Check size={15} />}
+                {cooked ? "Made" : "Made this"}
+              </button>
+            )}
+            {onSave && (
+              <button
+                className={saved ? "save-recipe-button saved" : "save-recipe-button"}
+                onClick={onSave}
+                disabled={saved}
+              >
+                <Bookmark size={15} fill={saved ? "currentColor" : "none"} />
+                {saved ? "Saved" : "Save for later"}
+              </button>
+            )}
+          </div>
         )}
       </article>
     </div>
