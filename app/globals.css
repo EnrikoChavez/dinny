@@ -414,36 +414,174 @@ select:focus-visible {
   letter-spacing: -0.035em;
 }
 
+.history-view .view-heading {
+  align-items: flex-start;
+}
+
+.history-view .view-heading svg {
+  margin-top: 6px;
+  color: var(--accent);
+}
+
+.history-view .view-heading p {
+  max-width: 430px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
 .history-list {
   border-top: 1px solid var(--line);
 }
 
-.history-row {
+.cook-again-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cook-again-card-top,
+.reflection-row,
+.feedback-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
-  padding: 17px 2px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
+  gap: 18px;
 }
 
-.history-row > span {
+.cook-again-card-top > span {
   display: grid;
   gap: 5px;
 }
 
-.history-row time {
+.cooked-date {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.cooked-date time {
   color: var(--muted);
   font-size: 12px;
+}
+
+.cooked-date button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.reflection-row > span,
+.feedback-row > span {
+  flex: 0 0 108px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rating-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.rating-buttons button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #c8c1bc;
+  cursor: pointer;
+}
+
+.rating-buttons button.rated {
+  color: var(--accent);
+}
+
+.feedback-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  width: min(420px, 100%);
+}
+
+.feedback-editor textarea {
+  min-height: 54px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.42);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.feedback-editor textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.revise-recipe {
+  align-self: end;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.revise-recipe:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .empty-copy {
   color: var(--muted);
   font-size: 14px;
+}
+
+@media (max-width: 560px) {
+  .cook-again-card-top,
+  .reflection-row,
+  .feedback-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .cooked-date {
+    justify-items: start;
+  }
+
+  .rating-buttons {
+    justify-content: flex-start;
+  }
+
+  .feedback-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .revise-recipe {
+    justify-self: start;
+  }
 }
 
 .preference-form {

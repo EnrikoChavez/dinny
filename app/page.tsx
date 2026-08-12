@@ -16,6 +16,7 @@ import {
   Pencil,
   RefreshCw,
   SlidersHorizontal,
+  Star,
   Sparkles,
   Timer,
   UserRound,
@@ -36,8 +37,13 @@ import {
   hasSupabaseConfig,
 } from "@/lib/supabase-browser";
 
-type View = "home" | "last-used" | "preferences";
-type HistoryItem = { recipe: Recipe; usedAt: string };
+type View = "home" | "cook-again" | "preferences";
+type HistoryItem = {
+  recipe: Recipe;
+  usedAt: string;
+  rating: number | null;
+  feedback: string;
+};
 type StoredPreferenceRow = {
   foods_to_avoid?: string;
   foods_to_prefer?: string;
@@ -141,7 +147,9 @@ export default function Home() {
   );
   const [assistantMessage, setAssistantMessage] = useState("");
   const [recommendationLoading, setRecommendationLoading] = useState(false);
-  const [lastUsed, setLastUsed] = useState<HistoryItem[]>([]);
+  const [cookedRecipes, setCookedRecipes] = useState<HistoryItem[]>([]);
+  const [feedbackDrafts, setFeedbackDrafts] = useState<Record<string, string>>({});
+  const [revisionLoading, setRevisionLoading] = useState<string | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
   useEffect(() => {
@@ -183,7 +191,7 @@ export default function Home() {
         setPreferencesMessage("");
         setProfileReady(true);
         setRecommendations(initialRecipes.slice(0, 3));
-        setLastUsed([]);
+        setCookedRecipes([]);
       });
       return;
     }
@@ -212,7 +220,7 @@ export default function Home() {
           .maybeSingle<StoredPreferenceRow>(),
         accountSupabase
           .from("recipe_history")
-          .select("recipe, used_at")
+          .select("recipe, used_at, rating, feedback")
           .eq("user_id", accountUser.id)
           .order("used_at", { ascending: false })
           .limit(20),
@@ -253,6 +261,8 @@ export default function Home() {
       const cloudHistory = (historyData ?? []).map((item) => ({
         recipe: item.recipe as Recipe,
         usedAt: item.used_at as string,
+        rating: typeof item.rating === "number" ? item.rating : null,
+        feedback: typeof item.feedback === "string" ? item.feedback : "",
       }));
 
       setProfile(nextProfile);
@@ -262,7 +272,7 @@ export default function Home() {
       setRecommendations(
         rankRecipes(nextPreferences, nextProfile.restrictions, cloudHistory),
       );
-      setLastUsed(cloudHistory);
+      setCookedRecipes(cloudHistory);
       setProfileReady(true);
     }
 
@@ -315,7 +325,7 @@ export default function Home() {
     window.localStorage.setItem(`dinny-onboarding-${user.id}`, "done");
     setProfile(nextProfile);
     setProfileDraft(nextProfile);
-    setRecommendations(rankRecipes(preferences, nextProfile.restrictions, lastUsed));
+    setRecommendations(rankRecipes(preferences, nextProfile.restrictions, cookedRecipes));
     setProfileOpen(false);
   }
 
@@ -365,7 +375,7 @@ export default function Home() {
 
     setPreferences(nextPreferences);
     setPreferenceDraft(nextPreferences);
-    setRecommendations(rankRecipes(nextPreferences, profile.restrictions, lastUsed));
+    setRecommendations(rankRecipes(nextPreferences, profile.restrictions, cookedRecipes));
     setPreferencesMessage("Preferences saved.");
     return true;
   }
@@ -380,8 +390,14 @@ export default function Home() {
   }
 
   async function rememberRecipe(recipe: Recipe) {
-    const entry = { recipe, usedAt: new Date().toISOString() };
-    setLastUsed((current) => [
+    const existing = cookedRecipes.find((item) => item.recipe.id === recipe.id);
+    const entry: HistoryItem = {
+      recipe,
+      usedAt: new Date().toISOString(),
+      rating: existing?.rating ?? null,
+      feedback: existing?.feedback ?? "",
+    };
+    setCookedRecipes((current) => [
       entry,
       ...current.filter((item) => item.recipe.id !== recipe.id),
     ].slice(0, 20));
@@ -393,9 +409,60 @@ export default function Home() {
           recipe_id: recipe.id,
           recipe,
           used_at: entry.usedAt,
+          rating: entry.rating,
+          feedback: entry.feedback,
         },
         { onConflict: "user_id,recipe_id" },
       );
+    }
+  }
+
+  async function updateRecipeReflection(
+    recipeId: string,
+    updates: Pick<HistoryItem, "rating" | "feedback">,
+  ) {
+    const previous = cookedRecipes;
+    setCookedRecipes((current) =>
+      current.map((item) =>
+        item.recipe.id === recipeId ? { ...item, ...updates } : item,
+      ),
+    );
+
+    if (!user || !supabase) return;
+
+    const { error } = await supabase
+      .from("recipe_history")
+      .update(updates)
+      .eq("user_id", user.id)
+      .eq("recipe_id", recipeId);
+
+    if (error) setCookedRecipes(previous);
+  }
+
+  async function reviseRecipe(item: HistoryItem) {
+    const feedback = (feedbackDrafts[item.recipe.id] ?? item.feedback).trim();
+    if (!feedback || revisionLoading) return;
+
+    setRevisionLoading(item.recipe.id);
+    await updateRecipeReflection(item.recipe.id, {
+      rating: item.rating,
+      feedback,
+    });
+
+    try {
+      const response = await fetch("/api/revise-recipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipeId: item.recipe.id, feedback }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Couldn’t revise this recipe.");
+
+      setSelectedRecipe(data.recipe as Recipe);
+    } catch {
+      setAssistantMessage("Couldn’t revise that recipe yet. Try again in a moment.");
+    } finally {
+      setRevisionLoading(null);
     }
   }
 
@@ -529,10 +596,10 @@ export default function Home() {
             Home
           </button>
           <button
-            className={view === "last-used" ? "nav-link active" : "nav-link"}
-            onClick={() => setView("last-used")}
+            className={view === "cook-again" ? "nav-link active" : "nav-link"}
+            onClick={() => setView("cook-again")}
           >
-            Last used
+            Cook again
           </button>
           {user && (
             <button
@@ -609,33 +676,93 @@ export default function Home() {
               <p className="assistant-message">{assistantMessage}</p>
             )}
           </section>
-        ) : view === "last-used" ? (
+        ) : view === "cook-again" ? (
           <section className="history-view">
             <div className="view-heading">
               <History size={18} />
-              <h1>Last used</h1>
+              <div>
+                <h1>Cook again</h1>
+                <p>Your made recipes, with the notes that make the next time better.</p>
+              </div>
             </div>
 
-            {lastUsed.length ? (
+            {cookedRecipes.length ? (
               <div className="history-list">
-                {lastUsed.map((item) => (
-                  <button
+                {cookedRecipes.map((item) => (
+                  <article
                     key={`${item.recipe.id}-${item.usedAt}`}
-                    className="history-row"
-                    onClick={() => openRecipe(item.recipe)}
+                    className="cook-again-card"
                   >
-                    <span>
-                      <strong>{item.recipe.title}</strong>
-                      <small>
+                    <div className="cook-again-card-top">
+                      <span>
+                        <strong>{item.recipe.title}</strong>
+                        <small>
                         {item.recipe.time} min · {item.recipe.cuisine}
-                      </small>
-                    </span>
-                    <time>{formatHistoryDate(item.usedAt)}</time>
-                  </button>
+                        </small>
+                      </span>
+                      <div className="cooked-date">
+                        <time>Made {formatHistoryDate(item.usedAt)}</time>
+                        <button onClick={() => openRecipe(item.recipe)}>Cook again</button>
+                      </div>
+                    </div>
+                    <div className="reflection-row">
+                      <span>Rating</span>
+                      <div className="rating-buttons" aria-label={`Rate ${item.recipe.title}`}>
+                        {[1, 2, 3, 4, 5].map((rating) => (
+                          <button
+                            key={rating}
+                            className={item.rating && rating <= item.rating ? "rated" : ""}
+                            onClick={() => void updateRecipeReflection(item.recipe.id, { rating, feedback: item.feedback })}
+                            aria-label={`${rating} star${rating === 1 ? "" : "s"}`}
+                          >
+                            <Star size={16} fill="currentColor" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="feedback-row">
+                      <span>Quick feedback</span>
+                      <div className="feedback-editor">
+                        <textarea
+                          value={feedbackDrafts[item.recipe.id] ?? item.feedback}
+                          onChange={(event) =>
+                            setFeedbackDrafts((current) => ({
+                              ...current,
+                              [item.recipe.id]: event.target.value,
+                            }))
+                          }
+                          onBlur={(event) => {
+                            const feedback = event.target.value.trim();
+                            if (feedback !== item.feedback) {
+                              void updateRecipeReflection(item.recipe.id, {
+                                rating: item.rating,
+                                feedback,
+                              });
+                            }
+                          }}
+                          placeholder="Too spicy, double the portions…"
+                          aria-label={`Feedback for ${item.recipe.title}`}
+                          rows={2}
+                        />
+                        <button
+                          className="revise-recipe"
+                          onClick={() => void reviseRecipe(item)}
+                          disabled={
+                            revisionLoading === item.recipe.id ||
+                            !(feedbackDrafts[item.recipe.id] ?? item.feedback).trim()
+                          }
+                        >
+                          {revisionLoading === item.recipe.id
+                            ? "Revising…"
+                            : "Revise recipe"}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
                 ))}
               </div>
             ) : (
-              <p className="empty-copy">No recipes yet.</p>
+              <p className="empty-copy">Recipes you make will live here—ready for an easy repeat.</p>
             )}
           </section>
         ) : (
@@ -650,7 +777,7 @@ export default function Home() {
         )}
       </main>
 
-      {view !== "last-used" && (
+      {view !== "cook-again" && (
         <div className="chat-dock">
           {recommendationLoading && (
             <p className="finding-recipes">finding recipes</p>
@@ -694,7 +821,7 @@ export default function Home() {
                 }
               : undefined
           }
-          cooked={lastUsed.some(
+          cooked={cookedRecipes.some(
             (item) => item.recipe.id === selectedRecipe.id,
           )}
         />
