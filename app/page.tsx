@@ -3,18 +3,25 @@
 import type { User } from "@supabase/supabase-js";
 import {
   ArrowUp,
+  Ban,
   Check,
+  ChefHat,
   ChevronRight,
   Clock3,
+  Heart,
   History,
   LogOut,
   Mail,
+  MessageCircle,
+  Pencil,
   RefreshCw,
   SlidersHorizontal,
+  Sparkles,
+  Timer,
   UserRound,
   X,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   dietaryRestrictionOptions,
   emptyPreferenceSnapshot,
@@ -750,37 +757,84 @@ function PreferencesView({
   const [editingField, setEditingField] = useState<keyof PreferenceSnapshot | null>(
     null,
   );
-  const fields: Array<{
-    key: Exclude<keyof PreferenceSnapshot, "topCuisines">;
-    label: string;
-    placeholder: string;
+  const groups: Array<{
+    title: string;
+    description: string;
+    fields: Array<{
+      key: keyof PreferenceSnapshot;
+      label: string;
+      placeholder: string;
+      icon: ReactNode;
+    }>;
   }> = [
     {
-      key: "foodsToAvoid",
-      label: "Food I avoid",
-      placeholder: "e.g. mushrooms, shellfish",
+      title: "Taste profile",
+      description: "The ingredients and flavors you reach for.",
+      fields: [
+        {
+          key: "foodsToAvoid",
+          label: "Food I avoid",
+          placeholder: "e.g. mushrooms, shellfish",
+          icon: <Ban size={17} />,
+        },
+        {
+          key: "foodsToPrefer",
+          label: "Food I prefer",
+          placeholder: "e.g. salmon, leafy greens",
+          icon: <Heart size={17} />,
+        },
+        {
+          key: "flavorPreference",
+          label: "Flavor preference",
+          placeholder: "e.g. spicy, bright, savory",
+          icon: <Sparkles size={17} />,
+        },
+      ],
     },
     {
-      key: "foodsToPrefer",
-      label: "Food I prefer",
-      placeholder: "e.g. salmon, leafy greens",
+      title: "In the kitchen",
+      description: "How you like to cook on a typical day.",
+      fields: [
+        {
+          key: "cookingLevel",
+          label: "Cooking level",
+          placeholder: "e.g. beginner, confident home cook",
+          icon: <ChefHat size={17} />,
+        },
+        {
+          key: "effortWillingToSpend",
+          label: "Effort willing to spend",
+          placeholder: "e.g. quick weeknight meals",
+          icon: <Timer size={17} />,
+        },
+      ],
     },
     {
-      key: "cookingLevel",
-      label: "Cooking level",
-      placeholder: "e.g. beginner, confident home cook",
-    },
-    {
-      key: "effortWillingToSpend",
-      label: "Effort willing to spend",
-      placeholder: "e.g. quick weeknight meals",
-    },
-    {
-      key: "flavorPreference",
-      label: "Flavor preference",
-      placeholder: "e.g. spicy, bright, savory",
+      title: "Cuisine & extras",
+      description: "The cuisines and details that make a recipe feel right.",
+      fields: [
+        {
+          key: "topCuisines",
+          label: "Top cuisines",
+          placeholder: "e.g. Italian, Thai, Mexican",
+          icon: <SlidersHorizontal size={17} />,
+        },
+        {
+          key: "otherPreferences",
+          label: "Others",
+          placeholder: "Anything else Dinny should know",
+          icon: <MessageCircle size={17} />,
+        },
+      ],
     },
   ];
+
+  type PreferenceField = {
+    key: keyof PreferenceSnapshot;
+    label: string;
+    placeholder: string;
+    icon: ReactNode;
+  };
 
   const savedValue = (key: keyof PreferenceSnapshot) => {
     const value = preferences[key];
@@ -792,6 +846,56 @@ function PreferencesView({
     if (saved) setEditingField(null);
   }
 
+  function updateField(key: keyof PreferenceSnapshot, value: string) {
+    if (key === "topCuisines") {
+      onChange({ ...draft, topCuisines: value.split(",") });
+      return;
+    }
+
+    onChange({ ...draft, [key]: value });
+  }
+
+  function renderField(field: PreferenceField) {
+    const value = savedValue(field.key);
+    const editing = editingField === field.key;
+
+    if (value && !editing) {
+      return (
+        <button
+          className="preference-card saved"
+          type="button"
+          key={field.key}
+          onClick={() => setEditingField(field.key)}
+        >
+          <span className="preference-card-icon">{field.icon}</span>
+          <span className="preference-card-copy">
+            <small>{field.label}</small>
+            <strong>{value}</strong>
+          </span>
+          <Pencil className="preference-card-edit" size={15} />
+        </button>
+      );
+    }
+
+    return (
+      <label className="preference-card" key={field.key}>
+        <span className="preference-card-icon">{field.icon}</span>
+        <span className="preference-card-copy">
+          <small>{field.label}</small>
+          <input
+            value={
+              field.key === "topCuisines"
+                ? draft.topCuisines.join(", ")
+                : (draft[field.key] as string)
+            }
+            onChange={(event) => updateField(field.key, event.target.value)}
+            placeholder={field.placeholder}
+          />
+        </span>
+      </label>
+    );
+  }
+
   return (
     <section className="preferences-view">
       <div className="view-heading">
@@ -800,72 +904,17 @@ function PreferencesView({
       </div>
 
       <form className="preference-form" onSubmit={submit}>
-        {fields.map((field) => (
-          savedValue(field.key) && editingField !== field.key ? (
-            <button
-              className="saved-preference"
-              type="button"
-              key={field.key}
-              onClick={() => setEditingField(field.key)}
-            >
-              <span>{field.label}:</span> {savedValue(field.key)}
-            </button>
-          ) : (
-            <label key={field.key}>
-              <span>{field.label}</span>
-              <input
-                value={draft[field.key]}
-                onChange={(event) =>
-                  onChange({ ...draft, [field.key]: event.target.value })
-                }
-                placeholder={field.placeholder}
-              />
-            </label>
-          )
+        {groups.map((group) => (
+          <section className="preference-group" key={group.title}>
+            <div className="preference-group-heading">
+              <h2>{group.title}</h2>
+              <p>{group.description}</p>
+            </div>
+            <div className="preference-card-grid">
+              {group.fields.map(renderField)}
+            </div>
+          </section>
         ))}
-        {savedValue("topCuisines") && editingField !== "topCuisines" ? (
-          <button
-            className="saved-preference"
-            type="button"
-            onClick={() => setEditingField("topCuisines")}
-          >
-            <span>Top cuisines:</span> {savedValue("topCuisines")}
-          </button>
-        ) : (
-          <label>
-            <span>Top cuisines</span>
-            <input
-              value={draft.topCuisines.join(", ")}
-              onChange={(event) =>
-                onChange({
-                  ...draft,
-                  topCuisines: event.target.value.split(","),
-                })
-              }
-              placeholder="e.g. Italian, Thai, Mexican"
-            />
-          </label>
-        )}
-        {savedValue("otherPreferences") && editingField !== "otherPreferences" ? (
-          <button
-            className="saved-preference"
-            type="button"
-            onClick={() => setEditingField("otherPreferences")}
-          >
-            <span>Others:</span> {savedValue("otherPreferences")}
-          </button>
-        ) : (
-          <label>
-            <span>Others</span>
-            <input
-              value={draft.otherPreferences}
-              onChange={(event) =>
-                onChange({ ...draft, otherPreferences: event.target.value })
-              }
-              placeholder="Anything else Dinny should know"
-            />
-          </label>
-        )}
         <button type="submit" className="save-preferences" disabled={busy}>
           {busy ? "Saving…" : "Save preferences"}
         </button>
