@@ -54,9 +54,19 @@ create table if not exists public.recipe_history (
 alter table public.recipe_history
   add column if not exists rating smallint check (rating between 1 and 5);
 
+create table if not exists public.saved_recipes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  recipe_id text not null,
+  recipe jsonb not null,
+  saved_at timestamptz not null default now(),
+  unique (user_id, recipe_id)
+);
+
 alter table public.profiles enable row level security;
 alter table public.user_preferences enable row level security;
 alter table public.recipe_history enable row level security;
+alter table public.saved_recipes enable row level security;
 
 create policy "Users can read their own profile"
   on public.profiles for select
@@ -96,6 +106,22 @@ create policy "Users can update their own recipe history"
 
 create policy "Users can delete their own recipe history"
   on public.recipe_history for delete
+  using (auth.uid() = user_id);
+
+create policy "Users can read their own saved recipes"
+  on public.saved_recipes for select
+  using (auth.uid() = user_id);
+
+create policy "Users can insert their own saved recipes"
+  on public.saved_recipes for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update their own saved recipes"
+  on public.saved_recipes for update
+  using (auth.uid() = user_id);
+
+create policy "Users can delete their own saved recipes"
+  on public.saved_recipes for delete
   using (auth.uid() = user_id);
 
 create or replace function public.handle_new_user()
