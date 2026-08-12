@@ -48,13 +48,11 @@ create table if not exists public.recipe_history (
   recipe jsonb not null,
   used_at timestamptz not null default now(),
   rating smallint check (rating between 1 and 5),
-  feedback text not null default '',
   unique (user_id, recipe_id)
 );
 
 alter table public.recipe_history
-  add column if not exists rating smallint check (rating between 1 and 5),
-  add column if not exists feedback text not null default '';
+  add column if not exists rating smallint check (rating between 1 and 5);
 
 alter table public.profiles enable row level security;
 alter table public.user_preferences enable row level security;

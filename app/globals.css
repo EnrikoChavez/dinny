@@ -444,8 +444,7 @@ select:focus-visible {
 }
 
 .cook-again-card-top,
-.reflection-row,
-.feedback-row {
+.reflection-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -480,8 +479,7 @@ select:focus-visible {
   cursor: pointer;
 }
 
-.reflection-row > span,
-.feedback-row > span {
+.reflection-row > span {
   flex: 0 0 108px;
   color: var(--muted);
   font-size: 13px;
@@ -510,57 +508,6 @@ select:focus-visible {
   color: var(--accent);
 }
 
-.feedback-editor {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  width: min(360px, 100%);
-}
-
-.feedback-editor p {
-  grid-column: 1 / -1;
-  margin: -2px 0 0;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.35;
-}
-
-.feedback-editor textarea {
-  min-height: 38px;
-  resize: none;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.24);
-  color: var(--ink);
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.feedback-editor textarea:focus {
-  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  outline-offset: 1px;
-}
-
-.revise-recipe {
-  align-self: end;
-  padding: 9px 10px;
-  border: 0;
-  border-radius: 9px;
-  background: var(--ink);
-  color: var(--paper);
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.revise-recipe:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
 .empty-copy {
   color: var(--muted);
   font-size: 14px;
@@ -568,8 +515,7 @@ select:focus-visible {
 
 @media (max-width: 560px) {
   .cook-again-card-top,
-  .reflection-row,
-  .feedback-row {
+  .reflection-row {
     align-items: flex-start;
     flex-direction: column;
     gap: 9px;
@@ -583,13 +529,6 @@ select:focus-visible {
     justify-content: flex-start;
   }
 
-  .feedback-editor {
-    grid-template-columns: 1fr;
-  }
-
-  .revise-recipe {
-    justify-self: start;
-  }
 }
 
 .preference-form {
