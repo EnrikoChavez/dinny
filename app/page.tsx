@@ -754,8 +754,9 @@ export default function Home() {
                         >
                           {revisionLoading === item.recipe.id
                             ? "Revising…"
-                            : "Revise recipe"}
+                            : "Generate revised recipe"}
                         </button>
+                        <p>Dinny will adapt this recipe using your note.</p>
                       </div>
                     </div>
                   </article>

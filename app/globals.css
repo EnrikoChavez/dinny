@@ -514,19 +514,27 @@ select:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
-  width: min(420px, 100%);
+  width: min(360px, 100%);
+}
+
+.feedback-editor p {
+  grid-column: 1 / -1;
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .feedback-editor textarea {
-  min-height: 54px;
-  resize: vertical;
-  padding: 10px 12px;
+  min-height: 38px;
+  resize: none;
+  padding: 9px 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.24);
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -537,7 +545,7 @@ select:focus-visible {
 
 .revise-recipe {
   align-self: end;
-  padding: 10px 12px;
+  padding: 9px 10px;
   border: 0;
   border-radius: 9px;
   background: var(--ink);
