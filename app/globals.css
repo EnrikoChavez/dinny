@@ -451,6 +451,28 @@ select:focus-visible {
   font-size: 12px;
 }
 
+.saved-preference {
+  width: 100%;
+  padding: 13px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+
+.saved-preference span {
+  color: var(--muted);
+}
+
+.saved-preference:hover {
+  color: var(--accent);
+}
+
 .preference-form input {
   width: 100%;
   min-height: 44px;
