@@ -18,7 +18,9 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   dietaryRestrictionOptions,
   emptyPreferenceSnapshot,
+  normalizeCuisines,
   normalizeDietaryRestrictions,
+  normalizePreferenceText,
   type PreferenceSnapshot,
 } from "@/lib/preferences";
 import { recipes as initialRecipes, type Recipe } from "@/lib/recipes";
@@ -30,15 +32,13 @@ import {
 type View = "home" | "last-used" | "preferences";
 type HistoryItem = { recipe: Recipe; usedAt: string };
 type StoredPreferenceRow = {
-  vegetarian?: boolean;
-  vegan?: boolean;
-  gluten_free?: boolean;
-  high_protein?: boolean;
-  max_cook_minutes?: number | null;
-  spice_level?: number | null;
-  bitterness_level?: number | null;
-  calorie_goal?: number | null;
-  preference_notes?: string;
+  foods_to_avoid?: string;
+  foods_to_prefer?: string;
+  cooking_level?: string;
+  effort_willing_to_spend?: string;
+  flavor_preference?: string;
+  top_cuisines?: string[];
+  other_preferences?: string;
 };
 type Profile = {
   displayName: string;
@@ -67,11 +67,12 @@ const genderOptions = [
 
 function rankRecipes(
   preferences: PreferenceSnapshot,
+  restrictions: string[],
   history: HistoryItem[] = [],
 ) {
   const recentIds = new Set(history.slice(0, 10).map((item) => item.recipe.id));
   const compatible = initialRecipes.filter((recipe) =>
-    preferences.dietaryRestrictions.every((restriction) =>
+    restrictions.every((restriction) =>
       recipe.dietary?.some(
         (item) => item.toLowerCase() === restriction.toLowerCase(),
       ),
@@ -82,19 +83,12 @@ function rankRecipes(
     .map((recipe, index) => ({
       recipe,
       score:
-        preferences.dietaryRestrictions.length * 10 +
-        (preferences.highProtein && recipe.tags.includes("High protein")
-          ? 20
-          : 0) +
-        (preferences.favoriteCuisines.some((cuisine) =>
+        (preferences.topCuisines.some((cuisine) =>
           recipe.cuisine.toLowerCase().includes(cuisine.toLowerCase()),
         )
           ? 20
           : 0) -
-        (preferences.maxCookMinutes &&
-        recipe.time > preferences.maxCookMinutes
-          ? 50
-          : 0) -
+        restrictions.length * 10 -
         (recentIds.has(recipe.id) ? 100 : 0) -
         index / 100,
     }))
@@ -122,6 +116,11 @@ export default function Home() {
   const [preferences, setPreferences] = useState<PreferenceSnapshot>(
     emptyPreferenceSnapshot,
   );
+  const [preferenceDraft, setPreferenceDraft] = useState<PreferenceSnapshot>(
+    emptyPreferenceSnapshot,
+  );
+  const [preferencesBusy, setPreferencesBusy] = useState(false);
+  const [preferencesMessage, setPreferencesMessage] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
@@ -173,6 +172,8 @@ export default function Home() {
         setProfile(emptyProfile);
         setProfileDraft(emptyProfile);
         setPreferences(emptyPreferenceSnapshot);
+        setPreferenceDraft(emptyPreferenceSnapshot);
+        setPreferencesMessage("");
         setProfileReady(true);
         setRecommendations(initialRecipes.slice(0, 3));
         setLastUsed([]);
@@ -188,7 +189,6 @@ export default function Home() {
       const [
         { data: profileData },
         { data: preferenceData },
-        { data: cuisineData },
         { data: historyData },
       ] = await Promise.all([
         accountSupabase
@@ -204,12 +204,6 @@ export default function Home() {
           .eq("user_id", accountUser.id)
           .maybeSingle<StoredPreferenceRow>(),
         accountSupabase
-          .from("cuisine_preferences")
-          .select("cuisine")
-          .eq("user_id", accountUser.id)
-          .order("score", { ascending: false })
-          .limit(8),
-        accountSupabase
           .from("recipe_history")
           .select("recipe, used_at")
           .eq("user_id", accountUser.id)
@@ -222,27 +216,15 @@ export default function Home() {
       const localComplete =
         window.localStorage.getItem(`dinny-onboarding-${accountUser.id}`) ===
         "done";
-      const restrictionSet = new Set(
-        normalizeDietaryRestrictions(
-          Array.isArray(profileData?.dietary_restrictions)
-            ? profileData.dietary_restrictions
-            : [],
-        ),
-      );
-      if (preferenceData?.vegetarian) restrictionSet.add("Vegetarian");
-      if (preferenceData?.vegan) restrictionSet.add("Vegan");
-      if (preferenceData?.gluten_free) restrictionSet.add("Gluten-free");
       const nextPreferences: PreferenceSnapshot = {
-        dietaryRestrictions: normalizeDietaryRestrictions([
-          ...restrictionSet,
-        ]),
-        highProtein: preferenceData?.high_protein ?? false,
-        maxCookMinutes: preferenceData?.max_cook_minutes ?? null,
-        spiceLevel: preferenceData?.spice_level ?? null,
-        bitternessLevel: preferenceData?.bitterness_level ?? null,
-        calorieGoal: preferenceData?.calorie_goal ?? null,
-        favoriteCuisines: (cuisineData ?? []).map((item) => item.cuisine),
-        preferenceNotes: preferenceData?.preference_notes ?? "",
+        foodsToAvoid: preferenceData?.foods_to_avoid ?? "",
+        foodsToPrefer: preferenceData?.foods_to_prefer ?? "",
+        cookingLevel: preferenceData?.cooking_level ?? "",
+        effortWillingToSpend:
+          preferenceData?.effort_willing_to_spend ?? "",
+        flavorPreference: preferenceData?.flavor_preference ?? "",
+        topCuisines: preferenceData?.top_cuisines ?? [],
+        otherPreferences: preferenceData?.other_preferences ?? "",
       };
       const nextProfile: Profile = {
         displayName:
@@ -253,7 +235,11 @@ export default function Home() {
         age: profileData?.age ? String(profileData.age) : "",
         gender: profileData?.gender || "",
         location: profileData?.location || "",
-        restrictions: nextPreferences.dietaryRestrictions,
+        restrictions: normalizeDietaryRestrictions(
+          Array.isArray(profileData?.dietary_restrictions)
+            ? profileData.dietary_restrictions
+            : [],
+        ),
         complete: Boolean(profileData?.onboarding_complete || localComplete),
       };
 
@@ -265,7 +251,10 @@ export default function Home() {
       setProfile(nextProfile);
       setProfileDraft(nextProfile);
       setPreferences(nextPreferences);
-      setRecommendations(rankRecipes(nextPreferences, cloudHistory));
+      setPreferenceDraft(nextPreferences);
+      setRecommendations(
+        rankRecipes(nextPreferences, nextProfile.restrictions, cloudHistory),
+      );
       setLastUsed(cloudHistory);
       setProfileReady(true);
     }
@@ -317,15 +306,60 @@ export default function Home() {
     }
 
     window.localStorage.setItem(`dinny-onboarding-${user.id}`, "done");
-    const nextPreferences = {
-      ...preferences,
-      dietaryRestrictions: nextProfile.restrictions,
-    };
     setProfile(nextProfile);
     setProfileDraft(nextProfile);
-    setPreferences(nextPreferences);
-    setRecommendations(rankRecipes(nextPreferences, lastUsed));
+    setRecommendations(rankRecipes(preferences, nextProfile.restrictions, lastUsed));
     setProfileOpen(false);
+  }
+
+  async function savePreferences(event: FormEvent) {
+    event.preventDefault();
+    if (!user || !supabase || preferencesBusy) return;
+
+    const nextPreferences: PreferenceSnapshot = {
+      foodsToAvoid: normalizePreferenceText(preferenceDraft.foodsToAvoid),
+      foodsToPrefer: normalizePreferenceText(preferenceDraft.foodsToPrefer),
+      cookingLevel: normalizePreferenceText(preferenceDraft.cookingLevel),
+      effortWillingToSpend: normalizePreferenceText(
+        preferenceDraft.effortWillingToSpend,
+      ),
+      flavorPreference: normalizePreferenceText(
+        preferenceDraft.flavorPreference,
+      ),
+      topCuisines: normalizeCuisines(preferenceDraft.topCuisines),
+      otherPreferences: normalizePreferenceText(
+        preferenceDraft.otherPreferences,
+        6000,
+      ),
+    };
+
+    setPreferencesBusy(true);
+    setPreferencesMessage("");
+    const { error } = await supabase.from("user_preferences").upsert(
+      {
+        user_id: user.id,
+        foods_to_avoid: nextPreferences.foodsToAvoid,
+        foods_to_prefer: nextPreferences.foodsToPrefer,
+        cooking_level: nextPreferences.cookingLevel,
+        effort_willing_to_spend: nextPreferences.effortWillingToSpend,
+        flavor_preference: nextPreferences.flavorPreference,
+        top_cuisines: nextPreferences.topCuisines,
+        other_preferences: nextPreferences.otherPreferences,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+    setPreferencesBusy(false);
+
+    if (error) {
+      setPreferencesMessage("Couldn’t save yet. Try again.");
+      return;
+    }
+
+    setPreferences(nextPreferences);
+    setPreferenceDraft(nextPreferences);
+    setRecommendations(rankRecipes(nextPreferences, profile.restrictions, lastUsed));
+    setPreferencesMessage("Preferences saved.");
   }
 
   function toggleRestriction(restriction: string) {
@@ -396,14 +430,7 @@ export default function Home() {
       if (data.preferences) {
         const nextPreferences = data.preferences as PreferenceSnapshot;
         setPreferences(nextPreferences);
-        setProfile((current) => ({
-          ...current,
-          restrictions: nextPreferences.dietaryRestrictions,
-        }));
-        setProfileDraft((current) => ({
-          ...current,
-          restrictions: nextPreferences.dietaryRestrictions,
-        }));
+        setPreferenceDraft(nextPreferences);
       }
       if (!data.preferencesUpdated || view !== "preferences") {
         setView("home");
@@ -605,8 +632,11 @@ export default function Home() {
           </section>
         ) : (
           <PreferencesView
-            preferences={preferences}
-            message={assistantMessage}
+            draft={preferenceDraft}
+            busy={preferencesBusy}
+            message={preferencesMessage || assistantMessage}
+            onChange={setPreferenceDraft}
+            onSave={savePreferences}
           />
         )}
       </main>
@@ -701,50 +731,47 @@ export default function Home() {
 }
 
 function PreferencesView({
-  preferences,
+  draft,
+  busy,
   message,
+  onChange,
+  onSave,
 }: {
-  preferences: PreferenceSnapshot;
+  draft: PreferenceSnapshot;
+  busy: boolean;
   message: string;
+  onChange: (preferences: PreferenceSnapshot) => void;
+  onSave: (event: FormEvent) => void;
 }) {
-  const rows = [
+  const fields: Array<{
+    key: Exclude<keyof PreferenceSnapshot, "topCuisines">;
+    label: string;
+    placeholder: string;
+  }> = [
     {
-      label: "Dietary",
-      value: preferences.dietaryRestrictions.join(", ") || "Not set",
+      key: "foodsToAvoid",
+      label: "Food I avoid",
+      placeholder: "e.g. mushrooms, shellfish",
     },
     {
-      label: "High protein",
-      value: preferences.highProtein ? "Preferred" : "Not set",
+      key: "foodsToPrefer",
+      label: "Food I prefer",
+      placeholder: "e.g. salmon, leafy greens",
     },
     {
-      label: "Cook time",
-      value: preferences.maxCookMinutes
-        ? `Up to ${preferences.maxCookMinutes} min`
-        : "Not set",
+      key: "cookingLevel",
+      label: "Cooking level",
+      placeholder: "e.g. beginner, confident home cook",
     },
     {
-      label: "Spice",
-      value:
-        preferences.spiceLevel === null
-          ? "Not set"
-          : `${preferences.spiceLevel} / 5`,
+      key: "effortWillingToSpend",
+      label: "Effort willing to spend",
+      placeholder: "e.g. quick weeknight meals",
     },
     {
-      label: "Bitterness",
-      value:
-        preferences.bitternessLevel === null
-          ? "Not set"
-          : `${preferences.bitternessLevel} / 5`,
-    },
-    {
-      label: "Calories",
-      value: preferences.calorieGoal
-        ? `About ${preferences.calorieGoal}`
-        : "Not set",
-    },
-    {
-      label: "Cuisines",
-      value: preferences.favoriteCuisines.join(", ") || "Not set",
+      key: "flavorPreference",
+      label: "Flavor preference",
+      placeholder: "e.g. spicy, bright, savory",
     },
   ];
 
@@ -755,18 +782,46 @@ function PreferencesView({
         <h1>Preferences</h1>
       </div>
 
-      <dl className="preference-list">
-        {rows.map((row) => (
-          <div key={row.label}>
-            <dt>{row.label}</dt>
-            <dd>{row.value}</dd>
-          </div>
+      <form className="preference-form" onSubmit={onSave}>
+        {fields.map((field) => (
+          <label key={field.key}>
+            <span>{field.label}</span>
+            <input
+              value={draft[field.key]}
+              onChange={(event) =>
+                onChange({ ...draft, [field.key]: event.target.value })
+              }
+              placeholder={field.placeholder}
+            />
+          </label>
         ))}
-        <div className="preference-notes-row">
-          <dt>Other</dt>
-          <dd>{preferences.preferenceNotes || "Not set"}</dd>
-        </div>
-      </dl>
+        <label>
+          <span>Top cuisines</span>
+          <input
+            value={draft.topCuisines.join(", ")}
+            onChange={(event) =>
+              onChange({
+                ...draft,
+                topCuisines: event.target.value.split(","),
+              })
+            }
+            placeholder="e.g. Italian, Thai, Mexican"
+          />
+        </label>
+        <label>
+          <span>Others</span>
+          <input
+            value={draft.otherPreferences}
+            onChange={(event) =>
+              onChange({ ...draft, otherPreferences: event.target.value })
+            }
+            placeholder="Anything else Dinny should know"
+          />
+        </label>
+        <button type="submit" className="save-preferences" disabled={busy}>
+          {busy ? "Saving…" : "Save preferences"}
+        </button>
+      </form>
 
       {message && <p className="assistant-message">{message}</p>}
     </section>
