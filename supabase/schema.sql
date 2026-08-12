@@ -22,31 +22,24 @@ alter table public.profiles
 
 create table if not exists public.user_preferences (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  vegetarian boolean not null default false,
-  vegan boolean not null default false,
-  gluten_free boolean not null default false,
-  high_protein boolean not null default false,
-  max_cook_minutes integer,
-  spice_level smallint check (spice_level between 0 and 5),
-  bitterness_level smallint check (bitterness_level between 0 and 5),
-  calorie_goal integer,
-  preference_notes text not null default '',
+  foods_to_avoid text not null default '',
+  foods_to_prefer text not null default '',
+  cooking_level text not null default '',
+  effort_willing_to_spend text not null default '',
+  flavor_preference text not null default '',
+  top_cuisines text[] not null default '{}',
+  other_preferences text not null default '',
   updated_at timestamptz not null default now()
 );
 
 alter table public.user_preferences
-  add column if not exists preference_notes text not null default '',
-  add column if not exists bitterness_level smallint check (bitterness_level between 0 and 5);
-
-alter table public.user_preferences
-  drop column if exists lactose_free;
-
-create table if not exists public.cuisine_preferences (
-  user_id uuid not null references auth.users(id) on delete cascade,
-  cuisine text not null,
-  score smallint not null default 5 check (score between 0 and 10),
-  primary key (user_id, cuisine)
-);
+  add column if not exists foods_to_avoid text not null default '',
+  add column if not exists foods_to_prefer text not null default '',
+  add column if not exists cooking_level text not null default '',
+  add column if not exists effort_willing_to_spend text not null default '',
+  add column if not exists flavor_preference text not null default '',
+  add column if not exists top_cuisines text[] not null default '{}',
+  add column if not exists other_preferences text not null default '';
 
 create table if not exists public.recipe_history (
   id uuid primary key default gen_random_uuid(),
@@ -59,7 +52,6 @@ create table if not exists public.recipe_history (
 
 alter table public.profiles enable row level security;
 alter table public.user_preferences enable row level security;
-alter table public.cuisine_preferences enable row level security;
 alter table public.recipe_history enable row level security;
 
 create policy "Users can read their own profile"
@@ -85,11 +77,6 @@ create policy "Users can insert their own preferences"
 create policy "Users can update their own preferences"
   on public.user_preferences for update
   using (auth.uid() = user_id);
-
-create policy "Users can manage their own cuisine preferences"
-  on public.cuisine_preferences for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
 
 create policy "Users can read their own recipe history"
   on public.recipe_history for select

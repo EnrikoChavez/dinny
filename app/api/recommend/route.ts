@@ -3,10 +3,9 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
-  dietaryRestrictionOptions,
   normalizeCuisines,
   normalizeDietaryRestrictions,
-  normalizePreferenceNotes,
+  normalizePreferenceText,
   type PreferenceSnapshot,
 } from "@/lib/preferences";
 import { recipes, type Recipe } from "@/lib/recipes";
@@ -24,20 +23,13 @@ type StoredProfile = {
 };
 
 type StoredPreferences = {
-  vegetarian?: boolean;
-  vegan?: boolean;
-  gluten_free?: boolean;
-  high_protein?: boolean;
-  max_cook_minutes?: number | null;
-  spice_level?: number | null;
-  bitterness_level?: number | null;
-  calorie_goal?: number | null;
-  preference_notes?: string;
-};
-
-type StoredCuisinePreference = {
-  cuisine: string;
-  score: number;
+  foods_to_avoid?: string;
+  foods_to_prefer?: string;
+  cooking_level?: string;
+  effort_willing_to_spend?: string;
+  flavor_preference?: string;
+  top_cuisines?: string[];
+  other_preferences?: string;
 };
 
 type StoredHistory = {
@@ -52,14 +44,13 @@ type PreferenceChange<T> = {
 };
 
 type PreferenceChanges = {
-  dietaryRestrictions: PreferenceChange<string[]>;
-  highProtein: PreferenceChange<boolean>;
-  maxCookMinutes: PreferenceChange<number | null>;
-  spiceLevel: PreferenceChange<number | null>;
-  bitternessLevel: PreferenceChange<number | null>;
-  calorieGoal: PreferenceChange<number | null>;
-  favoriteCuisines: PreferenceChange<string[]>;
-  preferenceNotes: PreferenceChange<string>;
+  foodsToAvoid: PreferenceChange<string>;
+  foodsToPrefer: PreferenceChange<string>;
+  cookingLevel: PreferenceChange<string>;
+  effortWillingToSpend: PreferenceChange<string>;
+  flavorPreference: PreferenceChange<string>;
+  topCuisines: PreferenceChange<string[]>;
+  otherPreferences: PreferenceChange<string>;
 };
 
 type AiResponse = {
@@ -69,23 +60,14 @@ type AiResponse = {
 };
 
 const defaultStoredPreferences: StoredPreferences = {
-  vegetarian: false,
-  vegan: false,
-  gluten_free: false,
-  high_protein: false,
-  max_cook_minutes: null,
-  spice_level: null,
-  bitterness_level: null,
-  calorie_goal: null,
-  preference_notes: "",
+  foods_to_avoid: "",
+  foods_to_prefer: "",
+  cooking_level: "",
+  effort_willing_to_spend: "",
+  flavor_preference: "",
+  top_cuisines: [],
+  other_preferences: "",
 };
-
-const nullableIntegerSchema = (minimum: number, maximum: number) => ({
-  anyOf: [
-    { type: "integer", minimum, maximum },
-    { type: "null" },
-  ],
-});
 
 const preferenceFieldSchema = (value: Record<string, unknown>) => ({
   type: "object",
@@ -148,40 +130,35 @@ const responseSchema = {
     preferenceChanges: {
       type: "object",
       properties: {
-        dietaryRestrictions: preferenceFieldSchema({
-          type: "array",
-          maxItems: dietaryRestrictionOptions.length,
-          items: {
-            type: "string",
-            enum: [...dietaryRestrictionOptions],
-          },
+        foodsToAvoid: preferenceFieldSchema({ type: "string", maxLength: 600 }),
+        foodsToPrefer: preferenceFieldSchema({ type: "string", maxLength: 600 }),
+        cookingLevel: preferenceFieldSchema({ type: "string", maxLength: 600 }),
+        effortWillingToSpend: preferenceFieldSchema({
+          type: "string",
+          maxLength: 600,
         }),
-        highProtein: preferenceFieldSchema({ type: "boolean" }),
-        maxCookMinutes: preferenceFieldSchema(nullableIntegerSchema(5, 240)),
-        spiceLevel: preferenceFieldSchema(nullableIntegerSchema(0, 5)),
-        bitternessLevel: preferenceFieldSchema(nullableIntegerSchema(0, 5)),
-        calorieGoal: preferenceFieldSchema(
-          nullableIntegerSchema(200, 5000),
-        ),
-        favoriteCuisines: preferenceFieldSchema({
+        flavorPreference: preferenceFieldSchema({
+          type: "string",
+          maxLength: 600,
+        }),
+        topCuisines: preferenceFieldSchema({
           type: "array",
           maxItems: 8,
           items: { type: "string", maxLength: 40 },
         }),
-        preferenceNotes: preferenceFieldSchema({
+        otherPreferences: preferenceFieldSchema({
           type: "string",
           maxLength: 6000,
         }),
       },
       required: [
-        "dietaryRestrictions",
-        "highProtein",
-        "maxCookMinutes",
-        "spiceLevel",
-        "bitternessLevel",
-        "calorieGoal",
-        "favoriteCuisines",
-        "preferenceNotes",
+        "foodsToAvoid",
+        "foodsToPrefer",
+        "cookingLevel",
+        "effortWillingToSpend",
+        "flavorPreference",
+        "topCuisines",
+        "otherPreferences",
       ],
       additionalProperties: false,
     },
@@ -205,21 +182,20 @@ const recommendationSystemPrompt = [
   "Treat wording such as 'I want pasta', 'give me something spicy', 'more Thai food', 'make it crispy', 'use my air fryer', a positive request centered on an ingredient or dish, or even a short food-only prompt such as 'sushi' as preference evidence.",
   "A request may update preferences even when it sounds specific to the current meal; food requests are useful taste signals unless the user clearly says not to remember them.",
   "Do not infer that a rejected, avoided, or allergy-related food is liked; save the negative or restriction signal instead.",
-  "Use typed fields when the signal maps cleanly to them and preferenceNotes for every other food-related signal.",
-  "When a signal maps to a typed field, also keep any useful nuance in preferenceNotes, but do not duplicate the exact typed value.",
-  "PreferenceNotes is a concise living summary, not a raw prompt log.",
-  "When preferenceNotes changes, return the complete revised note, preserve unrelated details, merge the new signal, update contradictions, and avoid duplicates.",
+  "Use only these preference fields: foodsToAvoid, foodsToPrefer, cookingLevel, effortWillingToSpend, flavorPreference, topCuisines, and otherPreferences.",
+  "FoodsToAvoid captures ingredients, dishes, cuisines, and dietary concerns the user wants excluded. FoodsToPrefer captures ingredients and dishes they want more often. CookingLevel captures their confidence or skill. EffortWillingToSpend captures time, complexity, cleanup, and effort. FlavorPreference captures taste and texture. TopCuisines is a concise ordered list. OtherPreferences is a concise living summary for signals that do not fit elsewhere.",
+  "When a string field changes, return its complete revised value, preserving useful unrelated details and avoiding duplicates.",
   "If a chat request contains any usable food signal not already represented, at least one preference field must have changed set to true.",
-  "Set preferenceNotes.changed to true whenever the new signal is not fully captured by a typed field.",
+  "Set otherPreferences.changed to true whenever the new signal is not fully captured by another field.",
   "If a chat request contains only navigation, a greeting, or no food signal, leave preferences unchanged.",
-  "Never store unrelated personal or sensitive information in preferenceNotes.",
+  "Never store unrelated personal or sensitive information in otherPreferences.",
   "For each changed collection, return the complete desired collection after applying the request.",
   "Copy every unchanged value from currentPreferences exactly and set changed to false.",
   "In refresh mode, every changed field must be false because refresh is generated by the interface rather than written by the user.",
-  "Dietary restrictions are hard constraints for recipes.",
-  "Treat preferenceNotes as recommendation context.",
+  "Profile dietary restrictions are hard constraints for recipes.",
+  "Treat every preference field as recommendation context.",
   "Avoid recently cooked and recently shown recipes unless explicitly requested.",
-  "Honor cooking-time, protein, spice, bitterness, calorie, cuisine, and free-form preferences unless the current request overrides a soft preference.",
+  "Honor foods to avoid, foods to prefer, cooking level, effort, flavor, cuisines, and other preferences unless the current request overrides a soft preference.",
   "Use location only for accessible ingredients and conventions.",
   "Keep ingredients common, steps concise, estimates honest, and message under twelve words.",
   "When preferences change, use the short message to confirm what Dinny remembered.",
@@ -228,11 +204,24 @@ const recommendationSystemPrompt = [
 function localRecommendations(
   prompt: string,
   preferences: PreferenceSnapshot,
+  restrictions: string[],
   recentRecipeIds: string[],
   excludedRecipeTitles: string[],
 ) {
-  const query =
-    `${prompt} ${preferences.dietaryRestrictions.join(" ")}`.toLowerCase();
+  const query = [
+    prompt,
+    preferences.foodsToPrefer,
+    preferences.flavorPreference,
+    preferences.topCuisines.join(" "),
+    preferences.otherPreferences,
+  ]
+    .join(" ")
+    .toLowerCase();
+  const avoided = preferences.foodsToAvoid
+    .toLowerCase()
+    .split(/[,/]/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 2);
   const recentIds = new Set(recentRecipeIds);
   const excludedTitles = new Set(
     excludedRecipeTitles.map((title) => title.toLowerCase()),
@@ -241,10 +230,16 @@ function localRecommendations(
     .filter(
       (recipe) =>
         !excludedTitles.has(recipe.title.toLowerCase()) &&
-        preferences.dietaryRestrictions.every((restriction) =>
+        restrictions.every((restriction) =>
           recipe.dietary?.some(
             (item) => item.toLowerCase() === restriction.toLowerCase(),
           ),
+        ) &&
+        !avoided.some((item) =>
+          [recipe.title, recipe.summary, recipe.cuisine, ...recipe.tags]
+            .join(" ")
+            .toLowerCase()
+            .includes(item),
         ),
     )
     .map((recipe, index) => {
@@ -260,19 +255,12 @@ function localRecommendations(
       const score =
         words.filter((word) => haystack.includes(word)).length * 10 -
         (query.includes("quick") ? recipe.time : 0) +
-        (preferences.highProtein && recipe.tags.includes("High protein")
-          ? 20
-          : 0) +
-        (preferences.favoriteCuisines.some((cuisine) =>
+        (preferences.topCuisines.some((cuisine) =>
           haystack.includes(cuisine.toLowerCase()),
         )
           ? 20
           : 0) -
-        (preferences.maxCookMinutes &&
-        recipe.time > preferences.maxCookMinutes
-          ? 50
-          : 0) +
-        preferences.dietaryRestrictions.length * 20 -
+        restrictions.length * 20 -
         (recentIds.has(recipe.id) ? 100 : 0) +
         index / 100;
       return { recipe, score };
@@ -307,30 +295,21 @@ function readOutputText(payload: {
     .find((content) => content.type === "output_text")?.text;
 }
 
-function toPreferenceSnapshot(
-  profileRestrictions: string[],
-  preferences: StoredPreferences,
-  cuisines: StoredCuisinePreference[],
-): PreferenceSnapshot {
-  const restrictions = new Set(
-    normalizeDietaryRestrictions(profileRestrictions),
-  );
-  if (preferences.vegetarian) restrictions.add("Vegetarian");
-  if (preferences.vegan) restrictions.add("Vegan");
-  if (preferences.gluten_free) restrictions.add("Gluten-free");
-
+function toPreferenceSnapshot(preferences: StoredPreferences): PreferenceSnapshot {
   return {
-    dietaryRestrictions: normalizeDietaryRestrictions([...restrictions]),
-    highProtein: preferences.high_protein ?? false,
-    maxCookMinutes: preferences.max_cook_minutes ?? null,
-    spiceLevel: preferences.spice_level ?? null,
-    bitternessLevel: preferences.bitterness_level ?? null,
-    calorieGoal: preferences.calorie_goal ?? null,
-    favoriteCuisines: normalizeCuisines(
-      cuisines.map((item) => item.cuisine),
+    foodsToAvoid: normalizePreferenceText(preferences.foods_to_avoid ?? ""),
+    foodsToPrefer: normalizePreferenceText(preferences.foods_to_prefer ?? ""),
+    cookingLevel: normalizePreferenceText(preferences.cooking_level ?? ""),
+    effortWillingToSpend: normalizePreferenceText(
+      preferences.effort_willing_to_spend ?? "",
     ),
-    preferenceNotes: normalizePreferenceNotes(
-      preferences.preference_notes ?? "",
+    flavorPreference: normalizePreferenceText(
+      preferences.flavor_preference ?? "",
+    ),
+    topCuisines: normalizeCuisines(preferences.top_cuisines ?? []),
+    otherPreferences: normalizePreferenceText(
+      preferences.other_preferences ?? "",
+      6000,
     ),
   };
 }
@@ -339,40 +318,28 @@ function applyPreferenceChanges(
   current: PreferenceSnapshot,
   changes: PreferenceChanges,
 ): PreferenceSnapshot {
-  const nullableInteger = (
-    value: number | null,
-    minimum: number,
-    maximum: number,
-  ) =>
-    value === null
-      ? null
-      : Math.min(maximum, Math.max(minimum, Math.round(value)));
-
   return {
-    dietaryRestrictions: changes.dietaryRestrictions.changed
-      ? normalizeDietaryRestrictions(changes.dietaryRestrictions.value)
-      : current.dietaryRestrictions,
-    highProtein: changes.highProtein.changed
-      ? changes.highProtein.value
-      : current.highProtein,
-    maxCookMinutes: changes.maxCookMinutes.changed
-      ? nullableInteger(changes.maxCookMinutes.value, 5, 240)
-      : current.maxCookMinutes,
-    spiceLevel: changes.spiceLevel.changed
-      ? nullableInteger(changes.spiceLevel.value, 0, 5)
-      : current.spiceLevel,
-    bitternessLevel: changes.bitternessLevel.changed
-      ? nullableInteger(changes.bitternessLevel.value, 0, 5)
-      : current.bitternessLevel,
-    calorieGoal: changes.calorieGoal.changed
-      ? nullableInteger(changes.calorieGoal.value, 200, 5000)
-      : current.calorieGoal,
-    favoriteCuisines: changes.favoriteCuisines.changed
-      ? normalizeCuisines(changes.favoriteCuisines.value)
-      : current.favoriteCuisines,
-    preferenceNotes: changes.preferenceNotes.changed
-      ? normalizePreferenceNotes(changes.preferenceNotes.value)
-      : current.preferenceNotes,
+    foodsToAvoid: changes.foodsToAvoid.changed
+      ? normalizePreferenceText(changes.foodsToAvoid.value)
+      : current.foodsToAvoid,
+    foodsToPrefer: changes.foodsToPrefer.changed
+      ? normalizePreferenceText(changes.foodsToPrefer.value)
+      : current.foodsToPrefer,
+    cookingLevel: changes.cookingLevel.changed
+      ? normalizePreferenceText(changes.cookingLevel.value)
+      : current.cookingLevel,
+    effortWillingToSpend: changes.effortWillingToSpend.changed
+      ? normalizePreferenceText(changes.effortWillingToSpend.value)
+      : current.effortWillingToSpend,
+    flavorPreference: changes.flavorPreference.changed
+      ? normalizePreferenceText(changes.flavorPreference.value)
+      : current.flavorPreference,
+    topCuisines: changes.topCuisines.changed
+      ? normalizeCuisines(changes.topCuisines.value)
+      : current.topCuisines,
+    otherPreferences: changes.otherPreferences.changed
+      ? normalizePreferenceText(changes.otherPreferences.value, 6000)
+      : current.otherPreferences,
   };
 }
 
@@ -436,7 +403,6 @@ export async function POST(request: Request) {
   const [
     profileResult,
     preferencesResult,
-    cuisineResult,
     historyResult,
   ] = await Promise.all([
     supabase
@@ -450,13 +416,6 @@ export async function POST(request: Request) {
       .eq("user_id", user.id)
       .maybeSingle<StoredPreferences>(),
     supabase
-      .from("cuisine_preferences")
-      .select("cuisine, score")
-      .eq("user_id", user.id)
-      .order("score", { ascending: false })
-      .limit(8)
-      .returns<StoredCuisinePreference[]>(),
-    supabase
       .from("recipe_history")
       .select("recipe_id, recipe, used_at")
       .eq("user_id", user.id)
@@ -468,7 +427,6 @@ export async function POST(request: Request) {
   const contextError =
     profileResult.error ||
     preferencesResult.error ||
-    cuisineResult.error ||
     historyResult.error;
   if (contextError) {
     console.error("Recommendation context unavailable:", contextError.message);
@@ -491,28 +449,19 @@ export async function POST(request: Request) {
     ...defaultStoredPreferences,
     ...storedPreferenceRow,
   };
-  const availablePreferenceColumns = new Set(
-    Object.keys(storedPreferenceRow ?? {}),
-  );
-  const storedCuisines = cuisineResult.data ?? [];
-  const currentPreferences = toPreferenceSnapshot(
+  const currentPreferences = toPreferenceSnapshot(storedPreferences);
+  const profileRestrictions = normalizeDietaryRestrictions(
     profile.dietary_restrictions ?? [],
-    storedPreferences,
-    storedCuisines,
   );
   const recentHistory = historyResult.data ?? [];
   const recentRecipeIds = recentHistory.map((item) => item.recipe_id);
   const contextUsed = {
     profile: true,
-    restrictions: currentPreferences.dietaryRestrictions.length,
+    restrictions: profileRestrictions.length,
     preferenceSignals:
-      Number(currentPreferences.highProtein) +
-      Number(currentPreferences.maxCookMinutes != null) +
-      Number(currentPreferences.spiceLevel != null) +
-      Number(currentPreferences.bitternessLevel != null) +
-      Number(currentPreferences.calorieGoal != null) +
-      currentPreferences.favoriteCuisines.length +
-      Number(Boolean(currentPreferences.preferenceNotes)),
+      Object.values(currentPreferences).filter((value) =>
+        Array.isArray(value) ? value.length : Boolean(value),
+      ).length,
     historyItems: recentHistory.length,
   };
   const apiKey = process.env.OPENAI_API_KEY;
@@ -522,6 +471,7 @@ export async function POST(request: Request) {
       ...localRecommendations(
         prompt,
         currentPreferences,
+        profileRestrictions,
         recentRecipeIds,
         excludedRecipeTitles,
       ),
@@ -561,6 +511,7 @@ export async function POST(request: Request) {
               request: prompt,
               profile: {
                 location: profile.location || null,
+                dietaryRestrictions: profileRestrictions,
               },
               currentPreferences,
               recentlyCooked: compactHistory(recentHistory),
@@ -593,11 +544,12 @@ export async function POST(request: Request) {
     const fallback = localRecommendations(
       prompt,
       currentPreferences,
+      profileRestrictions,
       recentRecipeIds,
       excludedRecipeTitles,
     );
     if (
-      currentPreferences.dietaryRestrictions.length &&
+      profileRestrictions.length &&
       fallback.recipes.length < 3
     ) {
       return NextResponse.json(
@@ -620,118 +572,27 @@ export async function POST(request: Request) {
     : currentPreferences;
 
   if (preferenceUpdateRequested) {
-    const restrictionsChanged =
-      parsed.preferenceChanges.dietaryRestrictions.changed;
-    const standardPreferencesChanged =
-      restrictionsChanged ||
-      parsed.preferenceChanges.highProtein.changed ||
-      parsed.preferenceChanges.maxCookMinutes.changed ||
-      parsed.preferenceChanges.spiceLevel.changed ||
-      parsed.preferenceChanges.bitternessLevel.changed ||
-      parsed.preferenceChanges.calorieGoal.changed ||
-      parsed.preferenceChanges.preferenceNotes.changed;
-
-    if (restrictionsChanged) {
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          dietary_restrictions: nextPreferences.dietaryRestrictions,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
-
-      if (error) {
-        console.error("Dietary preference update failed:", error.message);
-        return NextResponse.json(
-          { error: "Couldn’t save your preferences." },
-          { status: 500 },
-        );
-      }
-    }
-
-    if (standardPreferencesChanged) {
-      const preferenceValues: Record<string, unknown> = {
-        vegetarian:
-          nextPreferences.dietaryRestrictions.includes("Vegetarian"),
-        vegan: nextPreferences.dietaryRestrictions.includes("Vegan"),
-        gluten_free:
-          nextPreferences.dietaryRestrictions.includes("Gluten-free"),
-        high_protein: nextPreferences.highProtein,
-        max_cook_minutes: nextPreferences.maxCookMinutes,
-        spice_level: nextPreferences.spiceLevel,
-        bitterness_level: nextPreferences.bitternessLevel,
-        calorie_goal: nextPreferences.calorieGoal,
-        preference_notes: nextPreferences.preferenceNotes,
+    const { error } = await supabase.from("user_preferences").upsert(
+      {
+        user_id: user.id,
+        foods_to_avoid: nextPreferences.foodsToAvoid,
+        foods_to_prefer: nextPreferences.foodsToPrefer,
+        cooking_level: nextPreferences.cookingLevel,
+        effort_willing_to_spend: nextPreferences.effortWillingToSpend,
+        flavor_preference: nextPreferences.flavorPreference,
+        top_cuisines: nextPreferences.topCuisines,
+        other_preferences: nextPreferences.otherPreferences,
         updated_at: new Date().toISOString(),
-      };
-      const supportedPreferenceValues = Object.fromEntries(
-        Object.entries(preferenceValues).filter(([column]) =>
-          availablePreferenceColumns.has(column),
-        ),
+      },
+      { onConflict: "user_id" },
+    );
+
+    if (error) {
+      console.error("Preference update failed:", error.message);
+      return NextResponse.json(
+        { error: "Couldn’t save your preferences." },
+        { status: 500 },
       );
-      const { error } = await supabase.from("user_preferences").upsert(
-        { user_id: user.id, ...supportedPreferenceValues },
-        { onConflict: "user_id" },
-      );
-
-      if (error) {
-        console.error("Preference update failed:", error.message);
-        return NextResponse.json(
-          { error: "Couldn’t save your preferences." },
-          { status: 500 },
-        );
-      }
-    }
-
-    if (parsed.preferenceChanges.favoriteCuisines.changed) {
-      const cuisineRows = nextPreferences.favoriteCuisines.map(
-        (cuisine, index) => ({
-          user_id: user.id,
-          cuisine,
-          score: Math.max(1, 10 - index),
-        }),
-      );
-
-      if (cuisineRows.length) {
-        const { error } = await supabase
-          .from("cuisine_preferences")
-          .upsert(cuisineRows, { onConflict: "user_id,cuisine" });
-
-        if (error) {
-          console.error("Cuisine preference update failed:", error.message);
-          return NextResponse.json(
-            { error: "Couldn’t save your preferences." },
-            { status: 500 },
-          );
-        }
-      }
-
-      const nextCuisineKeys = new Set(
-        nextPreferences.favoriteCuisines.map((cuisine) =>
-          cuisine.toLowerCase(),
-        ),
-      );
-      const removedCuisines = storedCuisines
-        .map((item) => item.cuisine)
-        .filter(
-          (cuisine) => !nextCuisineKeys.has(cuisine.toLowerCase()),
-        );
-
-      if (removedCuisines.length) {
-        const { error } = await supabase
-          .from("cuisine_preferences")
-          .delete()
-          .eq("user_id", user.id)
-          .in("cuisine", removedCuisines);
-
-        if (error) {
-          console.error("Cuisine preference cleanup failed:", error.message);
-          return NextResponse.json(
-            { error: "Couldn’t save your preferences." },
-            { status: 500 },
-          );
-        }
-      }
     }
   }
 

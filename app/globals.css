@@ -436,32 +436,53 @@ select:focus-visible {
   font-size: 14px;
 }
 
-.preference-list {
-  margin: 0;
-  border-top: 1px solid var(--line);
-}
-
-.preference-list > div {
+.preference-form {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
-  gap: 20px;
-  padding: 17px 2px;
-  border-bottom: 1px solid var(--line);
+  gap: 18px;
 }
 
-.preference-list dt {
+.preference-form label {
+  display: grid;
+  gap: 8px;
+}
+
+.preference-form label > span {
   color: var(--muted);
   font-size: 12px;
 }
 
-.preference-list dd {
-  margin: 0;
+.preference-form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--ink);
+  font: inherit;
   font-size: 14px;
-  line-height: 1.5;
 }
 
-.preference-notes-row dd {
-  white-space: pre-wrap;
+.preference-form input::placeholder {
+  color: #a4a49f;
+}
+
+.save-preferences {
+  justify-self: start;
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.save-preferences:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .overlay {
@@ -898,8 +919,4 @@ select:focus-visible {
     max-width: none;
   }
 
-  .preference-list > div {
-    grid-template-columns: 95px minmax(0, 1fr);
-    gap: 14px;
-  }
 }
