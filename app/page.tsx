@@ -314,7 +314,7 @@ export default function Home() {
 
   async function savePreferences(event: FormEvent) {
     event.preventDefault();
-    if (!user || !supabase || preferencesBusy) return;
+    if (!user || !supabase || preferencesBusy) return false;
 
     const nextPreferences: PreferenceSnapshot = {
       foodsToAvoid: normalizePreferenceText(preferenceDraft.foodsToAvoid),
@@ -353,13 +353,14 @@ export default function Home() {
 
     if (error) {
       setPreferencesMessage("Couldn’t save yet. Try again.");
-      return;
+      return false;
     }
 
     setPreferences(nextPreferences);
     setPreferenceDraft(nextPreferences);
     setRecommendations(rankRecipes(nextPreferences, profile.restrictions, lastUsed));
     setPreferencesMessage("Preferences saved.");
+    return true;
   }
 
   function toggleRestriction(restriction: string) {
@@ -632,6 +633,7 @@ export default function Home() {
           </section>
         ) : (
           <PreferencesView
+            preferences={preferences}
             draft={preferenceDraft}
             busy={preferencesBusy}
             message={preferencesMessage || assistantMessage}
@@ -731,18 +733,23 @@ export default function Home() {
 }
 
 function PreferencesView({
+  preferences,
   draft,
   busy,
   message,
   onChange,
   onSave,
 }: {
+  preferences: PreferenceSnapshot;
   draft: PreferenceSnapshot;
   busy: boolean;
   message: string;
   onChange: (preferences: PreferenceSnapshot) => void;
-  onSave: (event: FormEvent) => void;
+  onSave: (event: FormEvent) => Promise<boolean>;
 }) {
+  const [editingField, setEditingField] = useState<keyof PreferenceSnapshot | null>(
+    null,
+  );
   const fields: Array<{
     key: Exclude<keyof PreferenceSnapshot, "topCuisines">;
     label: string;
@@ -775,6 +782,16 @@ function PreferencesView({
     },
   ];
 
+  const savedValue = (key: keyof PreferenceSnapshot) => {
+    const value = preferences[key];
+    return Array.isArray(value) ? value.join(", ") : value;
+  };
+
+  async function submit(event: FormEvent) {
+    const saved = await onSave(event);
+    if (saved) setEditingField(null);
+  }
+
   return (
     <section className="preferences-view">
       <div className="view-heading">
@@ -782,42 +799,73 @@ function PreferencesView({
         <h1>Preferences</h1>
       </div>
 
-      <form className="preference-form" onSubmit={onSave}>
+      <form className="preference-form" onSubmit={submit}>
         {fields.map((field) => (
-          <label key={field.key}>
-            <span>{field.label}</span>
+          savedValue(field.key) && editingField !== field.key ? (
+            <button
+              className="saved-preference"
+              type="button"
+              key={field.key}
+              onClick={() => setEditingField(field.key)}
+            >
+              <span>{field.label}:</span> {savedValue(field.key)}
+            </button>
+          ) : (
+            <label key={field.key}>
+              <span>{field.label}</span>
+              <input
+                value={draft[field.key]}
+                onChange={(event) =>
+                  onChange({ ...draft, [field.key]: event.target.value })
+                }
+                placeholder={field.placeholder}
+              />
+            </label>
+          )
+        ))}
+        {savedValue("topCuisines") && editingField !== "topCuisines" ? (
+          <button
+            className="saved-preference"
+            type="button"
+            onClick={() => setEditingField("topCuisines")}
+          >
+            <span>Top cuisines:</span> {savedValue("topCuisines")}
+          </button>
+        ) : (
+          <label>
+            <span>Top cuisines</span>
             <input
-              value={draft[field.key]}
+              value={draft.topCuisines.join(", ")}
               onChange={(event) =>
-                onChange({ ...draft, [field.key]: event.target.value })
+                onChange({
+                  ...draft,
+                  topCuisines: event.target.value.split(","),
+                })
               }
-              placeholder={field.placeholder}
+              placeholder="e.g. Italian, Thai, Mexican"
             />
           </label>
-        ))}
-        <label>
-          <span>Top cuisines</span>
-          <input
-            value={draft.topCuisines.join(", ")}
-            onChange={(event) =>
-              onChange({
-                ...draft,
-                topCuisines: event.target.value.split(","),
-              })
-            }
-            placeholder="e.g. Italian, Thai, Mexican"
-          />
-        </label>
-        <label>
-          <span>Others</span>
-          <input
-            value={draft.otherPreferences}
-            onChange={(event) =>
-              onChange({ ...draft, otherPreferences: event.target.value })
-            }
-            placeholder="Anything else Dinny should know"
-          />
-        </label>
+        )}
+        {savedValue("otherPreferences") && editingField !== "otherPreferences" ? (
+          <button
+            className="saved-preference"
+            type="button"
+            onClick={() => setEditingField("otherPreferences")}
+          >
+            <span>Others:</span> {savedValue("otherPreferences")}
+          </button>
+        ) : (
+          <label>
+            <span>Others</span>
+            <input
+              value={draft.otherPreferences}
+              onChange={(event) =>
+                onChange({ ...draft, otherPreferences: event.target.value })
+              }
+              placeholder="Anything else Dinny should know"
+            />
+          </label>
+        )}
         <button type="submit" className="save-preferences" disabled={busy}>
           {busy ? "Saving…" : "Save preferences"}
         </button>
