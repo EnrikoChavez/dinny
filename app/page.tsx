@@ -575,7 +575,7 @@ export default function Home() {
               }
               onClick={() => setView("preferences")}
             >
-              Preferences
+              Taste
             </button>
           )}
         </nav>
