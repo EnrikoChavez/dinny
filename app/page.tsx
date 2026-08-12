@@ -42,7 +42,6 @@ type HistoryItem = {
   recipe: Recipe;
   usedAt: string;
   rating: number | null;
-  feedback: string;
 };
 type StoredPreferenceRow = {
   foods_to_avoid?: string;
@@ -148,8 +147,6 @@ export default function Home() {
   const [assistantMessage, setAssistantMessage] = useState("");
   const [recommendationLoading, setRecommendationLoading] = useState(false);
   const [cookedRecipes, setCookedRecipes] = useState<HistoryItem[]>([]);
-  const [feedbackDrafts, setFeedbackDrafts] = useState<Record<string, string>>({});
-  const [revisionLoading, setRevisionLoading] = useState<string | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
   useEffect(() => {
@@ -220,7 +217,7 @@ export default function Home() {
           .maybeSingle<StoredPreferenceRow>(),
         accountSupabase
           .from("recipe_history")
-          .select("recipe, used_at, rating, feedback")
+          .select("recipe, used_at, rating")
           .eq("user_id", accountUser.id)
           .order("used_at", { ascending: false })
           .limit(20),
@@ -262,7 +259,6 @@ export default function Home() {
         recipe: item.recipe as Recipe,
         usedAt: item.used_at as string,
         rating: typeof item.rating === "number" ? item.rating : null,
-        feedback: typeof item.feedback === "string" ? item.feedback : "",
       }));
 
       setProfile(nextProfile);
@@ -395,7 +391,6 @@ export default function Home() {
       recipe,
       usedAt: new Date().toISOString(),
       rating: existing?.rating ?? null,
-      feedback: existing?.feedback ?? "",
     };
     setCookedRecipes((current) => [
       entry,
@@ -410,7 +405,6 @@ export default function Home() {
           recipe,
           used_at: entry.usedAt,
           rating: entry.rating,
-          feedback: entry.feedback,
         },
         { onConflict: "user_id,recipe_id" },
       );
@@ -419,12 +413,12 @@ export default function Home() {
 
   async function updateRecipeReflection(
     recipeId: string,
-    updates: Pick<HistoryItem, "rating" | "feedback">,
+    rating: number,
   ) {
     const previous = cookedRecipes;
     setCookedRecipes((current) =>
       current.map((item) =>
-        item.recipe.id === recipeId ? { ...item, ...updates } : item,
+        item.recipe.id === recipeId ? { ...item, rating } : item,
       ),
     );
 
@@ -432,38 +426,11 @@ export default function Home() {
 
     const { error } = await supabase
       .from("recipe_history")
-      .update(updates)
+      .update({ rating })
       .eq("user_id", user.id)
       .eq("recipe_id", recipeId);
 
     if (error) setCookedRecipes(previous);
-  }
-
-  async function reviseRecipe(item: HistoryItem) {
-    const feedback = (feedbackDrafts[item.recipe.id] ?? item.feedback).trim();
-    if (!feedback || revisionLoading) return;
-
-    setRevisionLoading(item.recipe.id);
-    await updateRecipeReflection(item.recipe.id, {
-      rating: item.rating,
-      feedback,
-    });
-
-    try {
-      const response = await fetch("/api/revise-recipe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipeId: item.recipe.id, feedback }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Couldn’t revise this recipe.");
-
-      setSelectedRecipe(data.recipe as Recipe);
-    } catch {
-      setAssistantMessage("Couldn’t revise that recipe yet. Try again in a moment.");
-    } finally {
-      setRevisionLoading(null);
-    }
   }
 
   function openRecipe(recipe: Recipe) {
@@ -712,51 +679,12 @@ export default function Home() {
                           <button
                             key={rating}
                             className={item.rating && rating <= item.rating ? "rated" : ""}
-                            onClick={() => void updateRecipeReflection(item.recipe.id, { rating, feedback: item.feedback })}
+                            onClick={() => void updateRecipeReflection(item.recipe.id, rating)}
                             aria-label={`${rating} star${rating === 1 ? "" : "s"}`}
                           >
                             <Star size={16} fill="currentColor" />
                           </button>
                         ))}
-                      </div>
-                    </div>
-                    <div className="feedback-row">
-                      <span>Quick feedback</span>
-                      <div className="feedback-editor">
-                        <textarea
-                          value={feedbackDrafts[item.recipe.id] ?? item.feedback}
-                          onChange={(event) =>
-                            setFeedbackDrafts((current) => ({
-                              ...current,
-                              [item.recipe.id]: event.target.value,
-                            }))
-                          }
-                          onBlur={(event) => {
-                            const feedback = event.target.value.trim();
-                            if (feedback !== item.feedback) {
-                              void updateRecipeReflection(item.recipe.id, {
-                                rating: item.rating,
-                                feedback,
-                              });
-                            }
-                          }}
-                          placeholder="Too spicy, double the portions…"
-                          aria-label={`Feedback for ${item.recipe.title}`}
-                          rows={2}
-                        />
-                        <button
-                          className="revise-recipe"
-                          onClick={() => void reviseRecipe(item)}
-                          disabled={
-                            revisionLoading === item.recipe.id ||
-                            !(feedbackDrafts[item.recipe.id] ?? item.feedback).trim()
-                          }
-                        >
-                          {revisionLoading === item.recipe.id
-                            ? "Revising…"
-                            : "Generate revised recipe"}
-                        </button>
-                        <p>Dinny will adapt this recipe using your note.</p>
                       </div>
                     </div>
                   </article>

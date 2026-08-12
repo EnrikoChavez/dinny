@@ -37,7 +37,6 @@ type StoredHistory = {
   recipe: Recipe;
   used_at: string;
   rating: number | null;
-  feedback: string;
 };
 
 type PreferenceChange<T> = {
@@ -285,7 +284,6 @@ function compactHistory(history: StoredHistory[]) {
     tags: item.recipe?.tags?.slice(0, 3) || [],
     usedAt: item.used_at,
     rating: item.rating,
-    feedback: item.feedback,
   }));
 }
 
@@ -421,7 +419,7 @@ export async function POST(request: Request) {
       .maybeSingle<StoredPreferences>(),
     supabase
       .from("recipe_history")
-      .select("recipe_id, recipe, used_at, rating, feedback")
+      .select("recipe_id, recipe, used_at, rating")
       .eq("user_id", user.id)
       .order("used_at", { ascending: false })
       .limit(12)
