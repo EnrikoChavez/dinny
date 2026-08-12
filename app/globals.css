@@ -390,6 +390,16 @@ select:focus-visible {
   padding-bottom: 80px;
 }
 
+.preferences-view .view-heading {
+  align-items: flex-end;
+  margin-bottom: 36px;
+}
+
+.preferences-view .view-heading svg {
+  margin-bottom: 5px;
+  color: var(--accent);
+}
+
 .view-heading {
   display: flex;
   align-items: center;
@@ -438,51 +448,119 @@ select:focus-visible {
 
 .preference-form {
   display: grid;
-  gap: 18px;
+  gap: 28px;
 }
 
-.preference-form label {
+.preference-group {
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
-.preference-form label > span {
+.preference-group-heading {
+  display: grid;
+  gap: 3px;
+}
+
+.preference-group-heading h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+}
+
+.preference-group-heading p {
+  margin: 0;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.45;
 }
 
-.saved-preference {
-  width: 100%;
-  padding: 13px 2px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
+.preference-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.preference-card {
+  display: flex;
+  align-items: flex-start;
+  min-height: 104px;
+  gap: 11px;
+  padding: 15px;
+  border: 1px solid rgba(32, 32, 30, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
   color: var(--ink);
   font: inherit;
-  font-size: 14px;
-  line-height: 1.5;
   text-align: left;
+}
+
+button.preference-card {
+  width: 100%;
   cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
 }
 
-.saved-preference span {
-  color: var(--muted);
+button.preference-card:hover {
+  border-color: rgba(214, 84, 50, 0.34);
+  box-shadow: 0 8px 20px rgba(87, 44, 53, 0.08);
+  transform: translateY(-1px);
 }
 
-.saved-preference:hover {
+.preference-card-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(214, 84, 50, 0.1);
   color: var(--accent);
+}
+
+.preference-card-copy {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.preference-card-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.preference-card-copy strong {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.28;
+  text-overflow: ellipsis;
+}
+
+.preference-card-edit {
+  margin: 2px 0 0 auto;
+  flex: 0 0 auto;
+  color: var(--muted);
 }
 
 .preference-form input {
   width: 100%;
-  min-height: 44px;
-  padding: 11px 13px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.65);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--ink);
   font: inherit;
   font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .preference-form input::placeholder {
@@ -490,10 +568,11 @@ select:focus-visible {
 }
 
 .save-preferences {
-  justify-self: start;
+  justify-self: stretch;
+  min-height: 46px;
   padding: 11px 16px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 14px;
   background: var(--ink);
   color: #fff;
   font: inherit;
@@ -505,6 +584,16 @@ select:focus-visible {
 .save-preferences:disabled {
   cursor: default;
   opacity: 0.6;
+}
+
+@media (max-width: 560px) {
+  .preference-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preference-card {
+    min-height: 88px;
+  }
 }
 
 .overlay {
